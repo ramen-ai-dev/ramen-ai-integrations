@@ -1,0 +1,65 @@
+# ============================================================
+# ramen-ai-integrations — .gitignore
+# ============================================================
+
+# --- Reference directory (local context only, never committed) ---
+_ref/
+
+# --- Node.js ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn/cache
+.yarn/unplugged
+.pnp.*
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+.eggs/
+dist/
+build/
+*.whl
+.venv/
+venv/
+env/
+.Python
+pip-wheel-metadata/
+
+# --- Build outputs ---
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# --- Environment & secrets ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# --- IDE & OS ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Test coverage ---
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
+.nyc_output/
+
+# --- Logs ---
+*.log
+logs/
