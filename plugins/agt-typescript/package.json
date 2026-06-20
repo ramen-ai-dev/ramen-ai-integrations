@@ -1,0 +1,41 @@
+{
+  "name": "@ramen-ai/agt-middleware",
+  "version": "0.1.0",
+  "description": "ramen-ai L2 Semantic Firewall middleware for the Microsoft Agent Governance Toolkit (TypeScript SDK)",
+  "license": "UNLICENSED",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "@microsoft/agent-governance-sdk": ">=3.7.0"
+  },
+  "peerDependenciesMeta": {
+    "@microsoft/agent-governance-sdk": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@microsoft/agent-governance-sdk": "^4.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -106,8 +106,11 @@ The `_ref/` directory contains the full backend reference implementation. It is 
 │   ├── python/          # Agnostic Python HTTP + Ed25519 verification core (PyPI package)
 │   └── node/            # Agnostic Node.js HTTP core (NPM package)
 ├── plugins/
+│   ├── agt-typescript/  # Microsoft AGT middleware (TypeScript — primary)
 │   ├── autogen/         # Microsoft AutoGen Python middleware
 │   └── kong/            # Kong Gateway Lua plugin scripts
+├── docs/
+│   └── research/        # Integration design blueprints
 ├── _ref/                # git-ignored — local backend reference only
 ├── .gitignore
 └── AGENTS.md            # This file
@@ -115,7 +118,36 @@ The `_ref/` directory contains the full backend reference implementation. It is 
 
 ---
 
-## 5. Non-Negotiable Quality Rules
+## 5. SDK Language Selection Policy
+
+When a target platform (e.g. Microsoft AGT, LangChain, AWS) publishes **more
+than one official SDK**, the coding agent **MUST** select the
+**TypeScript / Node.js SDK by default**. This is mandatory, not advisory.
+
+### Rationale
+Our backend is TypeScript and signs receipts with Ed25519 via Web Crypto. A
+TypeScript integration lets us:
+- **Reuse our Zod schemas** for request/response validation with zero
+  cross-language translation.
+- **Reuse our Web Crypto Ed25519 verification logic** byte-for-byte, eliminating
+  the canonical-payload re-derivation risk that exists across language runtimes
+  (e.g. Python `json.dumps` vs Node `JSON.stringify` whitespace and key order).
+- Keep one language, one type system, and one set of tests across backend and
+  integrations.
+
+### Rules
+- **Default to TypeScript/Node.js** whenever the platform offers it as an
+  official SDK alongside other languages.
+- **Deviation requires Master Architect sign-off.** Choosing a non-TypeScript
+  SDK when a TypeScript one exists is an architectural decision and must be
+  ratified by the MA, with the reason recorded in the relevant design doc.
+- Python (`core-clients/python/`) and other-language plugins remain supported
+  where the platform offers **no** TypeScript SDK, or where the host runtime is
+  fixed (e.g. a Python-only AGT host, Lua for Kong).
+
+---
+
+## 6. Non-Negotiable Quality Rules
 
 - **No secrets in code.** API keys, signing secrets, and credentials live in `.env` (git-ignored). Code reads from environment variables only.
 - **Typed interfaces.** Python code uses type hints throughout. Node code uses TypeScript.
