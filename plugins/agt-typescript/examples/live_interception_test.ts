@@ -22,7 +22,7 @@
 import { AgentMeshClient } from "@microsoft/agent-governance-sdk";
 import { RamenClient, RamenFirewallBackend, GovernanceDenied } from "../src/index.js";
 
-const BUNDLE = "ramen__eu_ai_act_baseline";
+const BUNDLE = "ramen__shield_core_it";
 const AGENT_ID = "it-ops-agent";
 const TOOL = "drop_database_table";
 const TARGET_TABLE = "users_prod";
@@ -144,7 +144,7 @@ async function main(): Promise<void> {
   console.log("RAMEN-AI L2 SEMANTIC FIREWALL — LIVE AGT INTERCEPTION SANDBOX");
   rule();
   console.log("AGT agent DID:        ", client.identity.did);
-  console.log("Firewall bundle:      ", BUNDLE, "(only active bundle)");
+  console.log("Firewall bundle:      ", BUNDLE, "(Destructive Execution Firewall — IT security)");
   console.log("Registered backends:  ", client.policy.listBackends());
   console.log("");
 
