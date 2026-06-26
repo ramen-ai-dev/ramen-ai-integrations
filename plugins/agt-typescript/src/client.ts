@@ -109,10 +109,12 @@ export class RamenClient {
     }
 
     const steeringParts: string[] = [];
-    for (const v of data.total_violations) {
+    // Guard against a malformed 200 body: these are typed as required arrays,
+    // but the response is untrusted JSON, so default to [] before iterating.
+    for (const v of data.total_violations ?? []) {
       if (v.recovery_instruction) steeringParts.push(v.recovery_instruction);
     }
-    for (const r of data.results) {
+    for (const r of data.results ?? []) {
       if (r.instruction) steeringParts.push(r.instruction);
     }
 
