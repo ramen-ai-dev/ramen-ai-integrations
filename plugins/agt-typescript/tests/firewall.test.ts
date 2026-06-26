@@ -163,3 +163,40 @@ describe("RamenFirewallBackend — allowed action", () => {
     expect(outcome.decision).toBe("deny");
   });
 });
+
+describe("RamenFirewallBackend — infrastructure failure (fail-closed)", () => {
+  /** A client whose evaluate call always throws (simulates timeout / 5xx). */
+  function failingClient(message: string): RamenClient {
+    const fetchImpl = (async () => {
+      throw new Error(message);
+    }) as unknown as typeof fetch;
+    return new RamenClient({ apiKey: "ramen_ak_test", fetchImpl });
+  }
+
+  it("governAction throws GovernanceDenied (failedClosed) and never runs the tool", async () => {
+    const backend = new RamenFirewallBackend(failingClient("ETIMEDOUT"), {
+      policyIds: ["1006492f-db62-4f46-8775-48b966c5c956"],
+    });
+    let ran = false;
+    const err = await backend
+      .governAction("recommend_product", { input: "anything" }, () => {
+        ran = true;
+        return "executed";
+      })
+      .catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(GovernanceDenied);
+    expect((err as GovernanceDenied).failedClosed).toBe(true);
+    expect((err as GovernanceDenied).verdict.allowed).toBe(false);
+    expect(ran).toBe(false);
+  });
+
+  it("evaluateAction returns a deny outcome when the API errors", async () => {
+    const backend = new RamenFirewallBackend(failingClient("HTTP 500"), {
+      policyIds: ["1006492f-db62-4f46-8775-48b966c5c956"],
+    });
+    const outcome = await backend.evaluateAction("recommend_product", { input: "anything" });
+    expect(outcome.decision).toBe("deny");
+    expect(outcome.error).toContain("HTTP 500");
+  });
+});

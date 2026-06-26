@@ -39,12 +39,48 @@ const INPUT_KEYS = ["input", "input_text", "content", "message", "prompt"] as co
 export class GovernanceDenied extends Error {
   readonly steering: string;
   readonly verdict: ComplianceVerdict;
+  /** True when the denial was caused by an infrastructure/evaluation failure
+   *  (timeout, 5xx, malformed response) rather than an explicit policy block. */
+  readonly failedClosed: boolean;
 
-  constructor(steering: string, verdict: ComplianceVerdict) {
+  constructor(steering: string, verdict: ComplianceVerdict, failedClosed = false) {
     super(steering || "Action denied by ramen-ai firewall");
     this.name = "GovernanceDenied";
     this.steering = steering || this.message;
     this.verdict = verdict;
+    this.failedClosed = failedClosed;
+  }
+
+  /**
+   * Build a fail-closed denial for an infrastructure/evaluation error. The
+   * synthetic verdict records the failure so audit consumers can distinguish
+   * "blocked by policy" from "blocked because we could not evaluate".
+   */
+  static failClosed(action: string, errorMessage: string): GovernanceDenied {
+    const steering =
+      "Action denied: the ramen-ai firewall could not be reached or returned an " +
+      "error, so the action was blocked (fail-closed). Retry once the firewall is reachable.";
+    const verdict: ComplianceVerdict = {
+      allowed: false,
+      steering,
+      policyIds: [],
+      statutoryAnchors: [],
+      receiptVerified: false,
+      receiptReason: `fail-closed on '${action}': ${errorMessage}`,
+      data: {
+        allowed: false,
+        policy_ids: [],
+        policies_evaluated: 0,
+        policies_passed: 0,
+        policies_failed: 0,
+        policies_errored: 1,
+        total_violations: [],
+        results: [],
+        execution_time_ms: 0,
+        executed_at: new Date().toISOString(),
+      },
+    };
+    return new GovernanceDenied(steering, verdict, true);
   }
 }
 
@@ -129,10 +165,12 @@ export class RamenFirewallBackend implements ExternalPolicyBackend {
     }
     this.client = client;
     this.ledger = opts.ledger ?? new ReceiptLedger();
+    // Spread caller opts FIRST, then apply defaults, so an explicitly-passed
+    // `undefined` can never clobber a default value.
     this.opts = {
+      ...opts,
       agentId: opts.agentId ?? "ramen-agent",
       requireVerifiedReceipt: opts.requireVerifiedReceipt ?? true,
-      ...opts,
     };
   }
 
@@ -194,13 +232,28 @@ export class RamenFirewallBackend implements ExternalPolicyBackend {
    * Intercept the agent's proposed action: evaluate, and on a block throw
    * {@link GovernanceDenied} carrying the steering instruction. On allow,
    * invoke and return the wrapped action's result.
+   *
+   * Fail-safe by construction: the wrapped `run` callback is invoked **only**
+   * after a verified `allow` verdict. Any failure — a policy block, an
+   * unverifiable receipt, OR an infrastructure error (API timeout, 5xx,
+   * malformed body) — results in a thrown {@link GovernanceDenied} and the
+   * tool never executes. Callers therefore catch a single, uniform error type
+   * regardless of whether the cause was policy or transport (fail-closed).
    */
   async governAction<T>(
     action: string,
     context: Record<string, unknown>,
     run: () => Promise<T> | T,
   ): Promise<T> {
-    const verdict = await this.runFirewall(action, context);
+    let verdict: ComplianceVerdict;
+    try {
+      verdict = await this.runFirewall(action, context);
+    } catch (err) {
+      // Infrastructure/evaluation failure — deny rather than risk executing an
+      // unevaluated action. Surface it as the same GovernanceDenied type so the
+      // host agent has one error contract to handle.
+      throw GovernanceDenied.failClosed(action, (err as Error).message);
+    }
     if (!verdict.allowed) {
       throw new GovernanceDenied(verdict.steering ?? "", verdict);
     }
