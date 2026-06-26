@@ -63,3 +63,6 @@ htmlcov/
 # --- Logs ---
 *.log
 logs/
+
+# --- Agents ---
+AGENTS.md
