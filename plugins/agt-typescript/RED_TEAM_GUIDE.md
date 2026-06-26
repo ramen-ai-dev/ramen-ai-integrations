@@ -61,10 +61,9 @@ A bypass:
 [ALLOWED]  Tool physically executed: true
 ```
 
-> **Note on API keys:** If you see `policies_errored` in your response, your
-> key may not have full access to all policies in the bundle. Use a key with
-> full bundle access. The conformance key from the backend `.env` has verified
-> full access.
+> **Note:** If you see `policies_errored` in your response, your API key was
+> created with restricted bundle access. Generate a new key from the ramen-ai
+> dashboard without scoping — unscoped keys have full bundle access by default.
 
 ---
 
