@@ -1,0 +1,24 @@
+{
+  "name": "@ramen-ai/github-action",
+  "version": "0.1.0",
+  "description": "GitHub Action that scans pull request diffs for prompt/policy-relevant text changes, evaluates them against the ramen-ai PaaS API, and fails the CI build (with a cryptographically-receipted PR comment) on a BLOCKED verdict.",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@actions/github": "^6.0.0",
+    "@ramen-ai/node-core": "file:../../core-clients/node"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

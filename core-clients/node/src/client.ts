@@ -1,0 +1,133 @@
+/**
+ * RamenClient — Promise-based HTTP client for the ramen-ai PaaS evaluation
+ * API, built on the global `fetch`.
+ *
+ * It calls `POST /api/v1/paas/evaluate`, verifies the V5 receipt locally,
+ * and returns a normalized {@link ComplianceVerdict}.
+ */
+
+import type {
+  ComplianceVerdict,
+  EvaluationResponse,
+  RamenReceipt,
+} from "./types.js";
+import { verifyReceipt, AUDIT_PUBLIC_KEYS } from "./verifier.js";
+
+const DEFAULT_BASE_URL = "https://api.ramenai.dev";
+const EVALUATE_PATH = "/api/v1/paas/evaluate";
+
+export interface RamenClientOptions {
+  apiKey: string;
+  baseUrl?: string;
+  /** Override the public-key map (e.g. for test-vector verification). */
+  publicKeys?: Record<string, string>;
+  /** Injectable fetch for testing; defaults to global fetch. */
+  fetchImpl?: typeof fetch;
+  /** Request timeout in ms (default 30000). */
+  timeoutMs?: number;
+}
+
+export interface EvaluateOptions {
+  bundleIds?: string[];
+  policyIds?: string[];
+  context?: Record<string, string>;
+}
+
+export class RamenClient {
+  private readonly apiKey: string;
+  private readonly baseUrl: string;
+  private readonly publicKeys: Record<string, string>;
+  private readonly fetchImpl: typeof fetch;
+  private readonly timeoutMs: number;
+
+  constructor(opts: RamenClientOptions) {
+    if (!opts.apiKey) throw new Error("RamenClient requires a non-empty apiKey");
+    this.apiKey = opts.apiKey;
+    this.baseUrl = opts.baseUrl ?? DEFAULT_BASE_URL;
+    this.publicKeys = opts.publicKeys ?? AUDIT_PUBLIC_KEYS;
+    this.fetchImpl = opts.fetchImpl ?? globalThis.fetch;
+    this.timeoutMs = opts.timeoutMs ?? 30_000;
+    if (typeof this.fetchImpl !== "function") {
+      throw new Error("No fetch implementation available; pass opts.fetchImpl");
+    }
+  }
+
+  /**
+   * Evaluate `input` against the given policies/bundles, verify the receipt,
+   * and return a normalized verdict.
+   *
+   * Fail-closed: any transport or parse error throws; callers must treat a
+   * thrown error as a denial.
+   */
+  async evaluateCompliance(input: string, opts: EvaluateOptions = {}): Promise<ComplianceVerdict> {
+    if (!opts.bundleIds?.length && !opts.policyIds?.length) {
+      throw new Error("Provide at least one of bundleIds or policyIds");
+    }
+
+    const body: Record<string, unknown> = { input };
+    if (opts.bundleIds?.length) body.bundle_ids = opts.bundleIds;
+    if (opts.policyIds?.length) body.policy_ids = opts.policyIds;
+    if (opts.context) body.context = opts.context;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    let envelope: { data?: EvaluationResponse };
+    try {
+      const res = await this.fetchImpl(`${this.baseUrl}${EVALUATE_PATH}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        throw new Error(`evaluate failed: HTTP ${res.status} ${res.statusText}`);
+      }
+      envelope = (await res.json()) as { data?: EvaluationResponse };
+    } finally {
+      clearTimeout(timer);
+    }
+
+    const data = envelope.data;
+    if (!data) throw new Error("evaluate response missing data envelope");
+
+    return this.normalize(data, input);
+  }
+
+  /** Verify the receipt (if present) and shape the normalized verdict. */
+  private async normalize(data: EvaluationResponse, input: string): Promise<ComplianceVerdict> {
+    const receipt: RamenReceipt | undefined = data.receipt;
+
+    let receiptVerified = false;
+    let receiptReason: string | undefined;
+    if (receipt?.canonical_payload) {
+      const result = await verifyReceipt(receipt, input, this.publicKeys);
+      receiptVerified = result.valid;
+      receiptReason = result.reason;
+    }
+
+    const steeringParts: string[] = [];
+    // Guard against a malformed 200 body: these are typed as required arrays,
+    // but the response is untrusted JSON, so default to [] before iterating.
+    for (const v of data.total_violations ?? []) {
+      if (v.recovery_instruction) steeringParts.push(v.recovery_instruction);
+    }
+    for (const r of data.results ?? []) {
+      if (r.instruction) steeringParts.push(r.instruction);
+    }
+
+    return {
+      allowed: data.allowed,
+      steering: steeringParts.length ? steeringParts.join(" | ") : null,
+      policyIds: data.policy_ids ?? [],
+      statutoryAnchors: data.statutory_anchors ?? [],
+      receipt,
+      receiptVerified,
+      receiptReason,
+      receiptAlert: data.receipt_alert,
+      data,
+    };
+  }
+}
