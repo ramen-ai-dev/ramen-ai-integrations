@@ -1,0 +1,167 @@
+# ramen-ai PR Compliance Interceptor
+
+A GitHub Action that scans pull request diffs for system-prompt and
+markdown/policy instruction changes, evaluates the added text against the
+[ramen-ai PaaS evaluation API](../../core-clients/node), and **fails the CI
+build** on a `[BLOCKED]` verdict. On a block it posts a single pull request
+comment carrying the verdict, the statutory anchor(s), the steering
+instruction, and the Ed25519 cryptographic receipt signature.
+
+Receipt verification is performed locally by the
+[`@ramen-ai/node-core`](../../core-clients/node) client, against the V5
+Evaluation API contract — no trust in the API server is required to confirm a
+verdict.
+
+---
+
+## Usage
+
+Add a workflow such as `.github/workflows/ramen-compliance.yml`:
+
+```yaml
+name: ramen-ai Compliance
+
+on:
+  pull_request:
+
+permissions:
+  contents: read          # read the PR diff
+  pull-requests: write    # post the verdict comment
+
+jobs:
+  compliance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ramen-ai PR Compliance Interceptor
+        uses: ramen-ai/ramen-ai-integrations/plugins/github-action@v1
+        with:
+          ramen_api_key: ${{ secrets.RAMEN_API_KEY }}
+          bundle_ids: ramen__eu_ai_act_baseline,ramen__shield_core_it
+```
+
+The `permissions` block is required: the Action needs `contents: read` to fetch
+the changed files and `pull-requests: write` to post the verdict comment. If
+your organization runs workflows with restricted default permissions, set them
+explicitly as shown.
+
+### Raw policy testing (no bundle)
+
+Leave `bundle_ids` empty and pass explicit `policy_ids` instead:
+
+```yaml
+        with:
+          ramen_api_key: ${{ secrets.RAMEN_API_KEY }}
+          bundle_ids: ""
+          policy_ids: 1006492f-db62-4f46-8775-48b966c5c956
+```
+
+At least one of `bundle_ids` or `policy_ids` must resolve to a value; otherwise
+the evaluation cannot run and the Action fails with a configuration error.
+
+---
+
+## Inputs
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `ramen_api_key` | **yes** | — | ramen-ai PaaS API key. Always provide via a repository/organization **secret**, never inline. |
+| `bundle_ids` | no | `""` | Comma-separated bundle slugs to evaluate against (e.g. `ramen__eu_ai_act_baseline`). The server resolves them to policy IDs. |
+| `policy_ids` | no | `""` | Comma-separated policy UUIDs for raw policy testing when no bundle is supplied. |
+| `github_token` | no | `${{ github.token }}` | Token used to read the PR diff and post the verdict comment. |
+| `base_url` | no | `""` | Override the ramen-ai API base URL (defaults to the production endpoint). |
+| `file_extensions` | no | `.md,.txt,.py` | Comma-separated file extensions whose added text is scanned. |
+| `fail_on_unverified_receipt` | no | `"true"` | When `true`, a verdict whose Ed25519 receipt cannot be verified is treated as a build failure (fail-closed on evidence). |
+
+## Outputs
+
+| Output | Description |
+|---|---|
+| `blocked` | `"true"` if any scanned change was blocked (or failed closed), else `"false"`. |
+| `blocked_count` | Number of files that received a `[BLOCKED]` verdict. |
+
+---
+
+## How it works
+
+1. Reads the pull request's changed files via the GitHub REST API.
+2. Keeps only files whose extension matches `file_extensions`, and extracts the
+   **added** lines from each file's diff hunks.
+3. Sends each file's added text to the ramen-ai evaluation API through the Node
+   core client, which verifies the returned V5 Ed25519 receipt locally.
+4. On a `[BLOCKED]` verdict (or, when `fail_on_unverified_receipt` is set, an
+   evaluation that could not complete), calls `@actions/core.setFailed()` to
+   break the build.
+5. Posts one aggregated PR comment summarising every blocked file with its
+   statutory anchor(s), steering instruction, and receipt signature.
+
+The Action is **fail-closed**: an evaluation or transport error is surfaced as a
+blocking failure rather than a silent pass. Inputs are also subject to the
+contract's limits — the evaluation API accepts 1–50,000 characters per request,
+so a single file whose added text exceeds 50,000 characters is rejected by the
+API and treated as a blocking failure.
+
+---
+
+## Data Privacy & Security
+
+This Action transmits pull request content to an external evaluation API. The
+points below describe exactly what is sent and what is durably recorded, so it
+can be reviewed before adoption. Each claim is scoped to what is verifiable —
+either from this Action's own behaviour or from the published V5 Evaluation API
+contract.
+
+### 1. Only an explicit, configured subset of the diff is read
+
+The Action reads and transmits **only the added/modified lines** of files whose
+extension matches `file_extensions` (default: `.md`, `.txt`, `.py` — the file
+types that typically house system prompts and instructions). Files outside that
+allowlist, removed lines, and unchanged context lines are never read or sent.
+The allowlist is fully under your control via the `file_extensions` input.
+
+### 2. The evaluation endpoint is a semantic execution boundary
+
+For each matching file, only the extracted added text is sent to the evaluation
+API over HTTPS. The API's purpose is to return a compliance verdict plus a
+signed receipt; the raw text you send is **not** part of any signed, durably
+stored record it returns (see §3). The Action never sends repository secrets,
+environment variables, or the `context` metadata field.
+
+### 3. The cryptographic receipt ledger stores a hash, not your source
+
+Every evaluation returns a V5 Ed25519 receipt. Per the
+[Evaluation API contract](../../core-clients/node), the signed and durably
+stored **canonical payload binds your input by its SHA-256 hash
+(`payload_hash`)** — never the raw text. The immutable ledger row records that
+hash alongside the verdict, the short reasoning/steering strings, the statutory
+anchors, the evaluated policy IDs, and a timestamp. Your proprietary source
+content is therefore not persisted in the receipt: binding is by hash, which is
+enough to prove offline that a specific input produced a specific verdict
+(verify the signature against the published Ed25519 public key, then confirm
+`SHA-256(input) === payload_hash`) without the ledger holding your code.
+
+### Scope of these guarantees
+
+§1 is enforced by this Action's code. §3 is guaranteed by the signed receipt
+schema in the V5 contract and is independently verifiable. §2 describes the
+intended request/response model: the durable audit artifact contains only the
+hash, but how the transient request payload is handled in memory or forwarded to
+the underlying evaluation model is an operational property of the ramen-ai
+service, not something this Action enforces or that the public contract
+specifies. For a formal, contractual zero-retention-of-source assurance, request
+ramen-ai's data processing agreement, and avoid routing secrets through scanned
+files.
+
+---
+
+## Building
+
+The Action ships a single compiled bundle at `dist/index.js` (required by
+GitHub Actions). To rebuild after changing `src/`:
+
+```bash
+npm install
+npm run build      # esbuild -> dist/index.js
+npm run typecheck  # tsc --noEmit
+```
