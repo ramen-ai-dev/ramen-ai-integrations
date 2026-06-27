@@ -1,0 +1,53 @@
+name: "ramen-ai PR Compliance Interceptor"
+description: >-
+  Scans pull request diffs for system-prompt modifications and markdown/policy
+  instructions, evaluates the added text against the ramen-ai PaaS API, and
+  fails the CI build on a BLOCKED verdict — posting a cryptographically-receipted
+  comment on the pull request.
+author: "ramen-ai"
+branding:
+  icon: "shield"
+  color: "red"
+
+inputs:
+  ramen_api_key:
+    description: "ramen-ai PaaS API key (e.g. ramen_ak_...). Provide via a secret."
+    required: true
+  bundle_ids:
+    description: >-
+      Comma-separated ramen-ai bundle ids to evaluate the diff against (e.g.
+      "ramen__eu_ai_act_baseline,ramen__shield_core_it"). Leave empty to test
+      raw policies via `policy_ids` instead.
+    required: false
+    default: ""
+  policy_ids:
+    description: >-
+      Comma-separated ramen-ai policy ids for raw policy testing when no bundle
+      is supplied. At least one of `bundle_ids` or `policy_ids` must resolve to
+      a value, otherwise the evaluation cannot run.
+    required: false
+    default: ""
+  github_token:
+    description: "Token used to read the PR diff and post the verdict comment."
+    required: false
+    default: ${{ github.token }}
+  base_url:
+    description: "Override the ramen-ai API base URL (defaults to the production endpoint)."
+    required: false
+    default: ""
+  file_extensions:
+    description: >-
+      Comma-separated file extensions whose added/modified text is scanned
+      (these typically house system prompts and instructions).
+    required: false
+    default: ".md,.txt,.py"
+  fail_on_unverified_receipt:
+    description: >-
+      When "true", a BLOCKED verdict whose Ed25519 receipt cannot be verified is
+      still treated as a build failure (default true — fail closed on evidence).
+    required: false
+    default: "true"
+
+runs:
+  using: "node20"
+  main: "dist/index.js"

@@ -37,6 +37,11 @@ build/
 out/
 *.tsbuildinfo
 
+# GitHub Actions require their compiled single-file bundle to be committed,
+# so the action's dist/ is explicitly tracked (overrides the dist/ rule above).
+!plugins/github-action/dist/
+!plugins/github-action/dist/**
+
 # --- Environment & secrets ---
 .env
 .env.*
