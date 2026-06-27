@@ -1,0 +1,26 @@
+name: Test ramen-ai PR Compliance Action
+
+# Self-test: run the locally-built action against every pull request so we can
+# empirically confirm it intercepts non-compliant diffs.
+on: [pull_request]
+
+# The action reads the PR diff (contents: read) and posts its verdict comment
+# (pull-requests: write). Note: for pull requests opened from a FORK, GitHub
+# withholds repository secrets, so RAMEN_API_KEY will be empty there by design —
+# this self-test is meant for same-repo branches.
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  compliance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run ramen-ai PR Compliance Interceptor
+        uses: ./plugins/github-action
+        with:
+          ramen_api_key: ${{ secrets.RAMEN_API_KEY }}
+          bundle_ids: "ramen__shield_core_it"
