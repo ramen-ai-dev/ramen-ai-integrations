@@ -1,0 +1,34 @@
+#!/usr/bin/env sh
+# commit-msg — reject commits that contain AI tool attribution.
+#
+# Enforces §6 of AGENTS.md: no AI tool attribution is permitted in commit
+# messages, trailers, or co-author lines under any circumstances.
+#
+# Activate once per clone:
+#   git config core.hooksPath .githooks
+#
+# To skip in a genuine emergency (requires explicit HSA approval per §2):
+#   git commit --no-verify
+
+COMMIT_MSG_FILE="$1"
+COMMIT_MSG="$(cat "$COMMIT_MSG_FILE")"
+
+# Single grep -iE call — easier to extend, no shell word-splitting issues.
+# Add new tool names or attribution patterns inside the alternation.
+ATTRIBUTION_PATTERN="Co-authored-by:.*[Kk]iro|Generated-by:.*[Kk]iro|Generated-by.*[Aa][Ii]|Written-with.*[Kk]iro|[Kk]iro.*[Aa]ssisted|Signed-off-by:.*[Kk]iro"
+
+if echo "$COMMIT_MSG" | grep -iE "$ATTRIBUTION_PATTERN" > /dev/null 2>&1; then
+  MATCHED="$(echo "$COMMIT_MSG" | grep -iE "$ATTRIBUTION_PATTERN")"
+  echo ""
+  echo "  COMMIT REJECTED — AI tool attribution detected."
+  echo ""
+  echo "  Offending line: $MATCHED"
+  echo ""
+  echo "  Commit messages must follow the Conventional Commits format only."
+  echo "  AI tool attribution (co-author trailers, Generated-by footers, etc.)"
+  echo "  is prohibited on all branches. See AGENTS.md §6."
+  echo ""
+  exit 1
+fi
+
+exit 0
