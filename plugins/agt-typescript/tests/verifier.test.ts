@@ -1,6 +1,6 @@
 /**
  * V5 Ed25519 verifier tests using the official test vectors from
- * _ref/ramen-ai-backend/docs/integration/alane-gist.md (§3).
+ * _ref/ramen-ai-backend/docs/integration/v5-conformance-pack.md (§3).
  *
  * The vectors are signed with a separate throwaway key pair, so we verify
  * with the TEST-VECTOR public key, not the production key.

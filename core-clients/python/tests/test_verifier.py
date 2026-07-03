@@ -2,7 +2,7 @@
 tests/test_verifier.py — V5 Ed25519 test vectors for ramen_ai.verifier.
 
 Test vectors are sourced verbatim from:
-  _ref/ramen-ai-backend/docs/integration/alane-gist.md  (§ 3. Test vectors)
+  _ref/ramen-ai-backend/docs/integration/v5-conformance-pack.md  (§ 3. Test vectors)
 
 IMPORTANT: these vectors were signed with a SEPARATE, throwaway key pair.
 Use TEST_VECTOR_PUBLIC_KEYS (not the production AUDIT_PUBLIC_KEYS) by passing
@@ -25,7 +25,7 @@ TEST_VECTOR_PUBLIC_KEYS: dict[str, str] = {
 }
 
 # ---------------------------------------------------------------------------
-# Vector A — sourced from alane-gist.md § 3. Test vectors (Schema V5)
+# Vector A — sourced from v5-conformance-pack.md § 3. Test vectors (Schema V5)
 # ---------------------------------------------------------------------------
 VECTOR_A_CANONICAL_PAYLOAD = (
     '{"schema_version":"5.0","kid":"ramen_pk_v1",'

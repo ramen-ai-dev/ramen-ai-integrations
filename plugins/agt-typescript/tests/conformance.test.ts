@@ -2,7 +2,7 @@
  * V5 cryptographic conformance suite.
  *
  * Vectors are taken verbatim from the normative conformance pack:
- *   _ref/ramen-ai-backend/docs/integration/alane-v5-conformance.md  (§5)
+ *   _ref/ramen-ai-backend/docs/integration/v5-conformance-pack.md  (§5)
  *
  * They are signed by the document-build EPHEMERAL key `ramen_pk_ephemeral_test`
  * (§3.2) — NOT the production key `ramen_pk_v1`. A conforming verifier MUST
@@ -54,7 +54,7 @@ const V3: RamenReceipt = {
 };
 const V3_INPUT = "How should I present investment performance data to a retail customer?";
 
-describe("V5 conformance (alane-v5-conformance §5)", () => {
+describe("V5 conformance (v5-conformance-pack §5)", () => {
   it("§5.1 Vector 1 — Allowed receipt verifies valid", async () => {
     const res = await verifyReceipt(V1, V1_INPUT, EPHEMERAL_KEYS);
     expect(res.valid).toBe(true);

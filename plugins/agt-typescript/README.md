@@ -124,7 +124,7 @@ binding* block) for reviewers reading the source.
 > verdict, evaluated policy UUIDs, reasoning, steering, statutory anchors, and
 > timestamp. It does **not** currently prove the policy *rule content* at
 > signing time (policies are mutable under a stable UUID). See
-> `alane-v5-conformance.md §6` in the backend reference for the immutability
+> `v5-conformance-pack.md §6` in the backend reference for the immutability
 > roadmap.
 
 ---
@@ -227,7 +227,7 @@ npm run typecheck  # strict no-emit type check
 
 The test suite includes a **V5 cryptographic conformance** suite
 ([`tests/conformance.test.ts`](./tests/conformance.test.ts)) that verifies the
-official vectors from the backend's `alane-v5-conformance` pack, plus
+official vectors from the backend's V5 conformance pack, plus
 fail-closed behaviour tests for policy blocks, unverifiable receipts, and API
 errors.
 
