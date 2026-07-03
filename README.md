@@ -1,0 +1,107 @@
+# ramen-ai Integrations
+
+Official SDK clients, middleware plugins, and CI/CD tooling for the
+[ramen-ai](https://ramenai.dev) PaaS evaluation API — a semantic compliance
+firewall for AI agents, enforced at the tool-call layer with cryptographic
+receipts.
+
+---
+
+## Getting Started
+
+To use these integrations, you must mint an API key.
+
+We offer a **Free Starter Tier** (1,000 evaluations/month, BYOK) which includes
+full access to our Core IT Security bundle. Mint your key at:
+
+### [https://ramenai.dev/pricing](https://ramenai.dev/pricing)
+
+Once you have a key, set it as an environment variable and pick the integration
+that fits your stack:
+
+```bash
+export RAMEN_API_KEY=ramen_ak_...
+```
+
+---
+
+## Integrations
+
+### Core Clients
+
+Portable, dependency-free HTTP clients with V5 Ed25519 receipt verification
+built in. Use these as the foundation for custom integrations or as a direct
+API client in your own tooling.
+
+| Package | Language | Path | Description |
+|---|---|---|---|
+| `@ramen-ai/node-core` | TypeScript / Node.js ≥18 | [`core-clients/node/`](core-clients/node/) | Agnostic HTTP client with Web Crypto Ed25519 receipt verification. The shared SDK used by all Node-based plugins. |
+| `ramen-ai` | Python ≥3.11 | [`core-clients/python/`](core-clients/python/) | Agnostic HTTP client with `cryptography` Ed25519 receipt verification. |
+
+---
+
+### Plugins
+
+Drop-in middleware and CI/CD tooling that embed the compliance firewall into
+your existing infrastructure with minimal configuration.
+
+| Plugin | Platform | Path | Description |
+|---|---|---|---|
+| `agt-typescript` | Microsoft Agent Governance Toolkit | [`plugins/agt-typescript/`](plugins/agt-typescript/) | TypeScript middleware that wires ramen-ai in as an AGT `ExternalPolicyBackend`. Intercepts agent tool calls pre-execution, verifies receipts, and logs to the AGT audit chain. |
+| `github-action` | GitHub Actions | [`plugins/github-action/`](plugins/github-action/) | CI/CD action that scans pull request diffs for system-prompt and policy instruction changes and fails the build on a `[BLOCKED]` verdict — posting a cryptographically-receipted comment on the PR. |
+| `kong` | Kong Gateway | [`plugins/kong/`](plugins/kong/) | Lua plugin for Kong Gateway. Intercepts HTTP requests at the gateway layer and enforces compliance before traffic reaches upstream AI services. _(In progress)_ |
+
+---
+
+## How it works
+
+Every evaluation returns a **V5 Ed25519 cryptographic receipt** — a signed,
+self-describing record that binds the verdict to a SHA-256 hash of your input.
+Receipts are verified locally by each client against the published public key,
+so no trust in the API server is required to confirm a verdict is authentic.
+
+```
+Your agent  →  ramen-ai middleware  →  POST /api/v1/paas/evaluate
+                                              ↓
+                                     Verdict + Ed25519 receipt
+                                              ↓
+                             Local receipt verification (Web Crypto)
+                                              ↓
+                              ALLOWED → tool executes
+                              BLOCKED → thrown / build failed / PR comment
+```
+
+---
+
+## Repository structure
+
+```
+/
+├── core-clients/
+│   ├── node/            # @ramen-ai/node-core  — TypeScript SDK
+│   └── python/          # ramen-ai             — Python SDK
+├── plugins/
+│   ├── agt-typescript/  # Microsoft AGT middleware
+│   ├── github-action/   # GitHub Actions CI/CD interceptor
+│   └── kong/            # Kong Gateway Lua plugin
+├── docs/
+│   └── research/        # Integration design blueprints
+├── .github/
+│   └── workflows/       # Self-testing CI workflow
+└── AGENTS.md            # Engineering protocol (local only — git-ignored)
+```
+
+---
+
+## Bundles
+
+The Free Starter Tier includes the **Core IT Security** bundle
+(`ramen__shield_core_it`). Additional regulatory bundles are available on paid
+tiers:
+
+| Bundle slug | Coverage |
+|---|---|
+| `ramen__shield_core_it` | Destructive execution, infrastructure abuse, prompt leakage & jailbreak, secret exfiltration, OWASP ASI-06 indirect injection |
+| `ramen__eu_ai_act_baseline` | EU AI Act Articles 5, 10, and 50 — prohibited practices, data governance, transparency obligations |
+
+Full bundle and policy reference: [https://ramenai.dev/pricing](https://ramenai.dev/pricing)
