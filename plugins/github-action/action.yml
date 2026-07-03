@@ -47,6 +47,15 @@ inputs:
       still treated as a build failure (default true — fail closed on evidence).
     required: false
     default: "true"
+  provider_key:
+    description: >-
+      BYOK (Bring Your Own Key) — your LLM provider API key (e.g. an OpenAI or
+      Anthropic key). Required on the Starter and Professional tiers, where
+      ramen-ai uses your own key to run LLM inference rather than a
+      platform-managed key. Omit on Enterprise. Always provide via a secret —
+      never inline. Example: ${{ secrets.OPENAI_API_KEY }}
+    required: false
+    default: ""
 
 runs:
   using: "node20"

@@ -138,12 +138,20 @@ Three steps to watch the firewall block a Morse-code prompt injection
 # 1. Install (from this directory: plugins/agt-typescript)
 npm install
 
-# 2. Provide your evaluation key
-export RAMEN_API_KEY=ramen_ak_...
+# 2. Provide your keys
+export RAMEN_API_KEY=ramen_ak_...   # ramen-ai evaluation key
+export OPENAI_API_KEY=sk-...        # BYOK: LLM provider key (Starter/Pro tiers)
+                                    # Enterprise: omit OPENAI_API_KEY
 
 # 3. Run the live interception demo
 npx tsx examples/test_agent.ts
 ```
+
+> **BYOK requirement:** The Starter and Professional tiers require you to
+> supply your own LLM provider key (`OPENAI_API_KEY` or `ANTHROPIC_API_KEY`).
+> The client forwards it as the `X-Provider-Key` header on every evaluation
+> request. Without it, the API returns `402 Payment Required`. Enterprise
+> tiers use platform-managed keys — omit the provider key entirely.
 
 Expected outcome:
 
@@ -165,11 +173,19 @@ import { RamenClient, RamenFirewallBackend, GovernanceDenied } from "@ramen-ai/a
 
 const client = AgentMeshClient.create("my-agent", { capabilities: ["wallet.transfer"] });
 
-const firewall = new RamenFirewallBackend(new RamenClient({ apiKey: process.env.RAMEN_API_KEY! }), {
-  bundleIds: ["ramen__shield_core_it"], // resolve bundle IDs from GET /api/v1/safety/bundles
-  agentId: "my-agent",
-  auditLogger: client.audit,
-});
+const firewall = new RamenFirewallBackend(
+  new RamenClient({
+    apiKey: process.env.RAMEN_API_KEY!,
+    // BYOK: required on Starter/Professional tiers.
+    // Omit on Enterprise (platform-managed keys).
+    providerKey: process.env.OPENAI_API_KEY,
+  }),
+  {
+    bundleIds: ["ramen__shield_core_it"],
+    agentId: "my-agent",
+    auditLogger: client.audit,
+  },
+);
 client.policy.registerBackend(firewall); // wire L2 into AGT's policy pipeline
 
 try {

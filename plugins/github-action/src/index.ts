@@ -140,6 +140,7 @@ async function run(): Promise<void> {
   const policyIds = parseCsv(core.getInput("policy_ids"));
   const githubToken = core.getInput("github_token");
   const baseUrl = core.getInput("base_url").trim();
+  const providerKey = core.getInput("provider_key").trim() || undefined;
   const extensions = parseCsv(core.getInput("file_extensions")).map((e) =>
     e.startsWith(".") ? e.toLowerCase() : `.${e.toLowerCase()}`,
   );
@@ -199,6 +200,7 @@ async function run(): Promise<void> {
   const client = new RamenClient({
     apiKey,
     ...(baseUrl ? { baseUrl } : {}),
+    ...(providerKey ? { providerKey } : {}),
   });
 
   const blocked: BlockedFinding[] = [];

@@ -23936,6 +23936,7 @@ var EVALUATE_PATH = "/api/v1/paas/evaluate";
 var RamenClient = class {
   apiKey;
   baseUrl;
+  providerKey;
   publicKeys;
   fetchImpl;
   timeoutMs;
@@ -23944,6 +23945,7 @@ var RamenClient = class {
       throw new Error("RamenClient requires a non-empty apiKey");
     this.apiKey = opts.apiKey;
     this.baseUrl = opts.baseUrl ?? DEFAULT_BASE_URL;
+    this.providerKey = opts.providerKey;
     this.publicKeys = opts.publicKeys ?? AUDIT_PUBLIC_KEYS;
     this.fetchImpl = opts.fetchImpl ?? globalThis.fetch;
     this.timeoutMs = opts.timeoutMs ?? 3e4;
@@ -23973,12 +23975,15 @@ var RamenClient = class {
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     let envelope;
     try {
+      const headers = {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json"
+      };
+      if (this.providerKey)
+        headers["X-Provider-Key"] = this.providerKey;
       const res = await this.fetchImpl(`${this.baseUrl}${EVALUATE_PATH}`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          "Content-Type": "application/json"
-        },
+        headers,
         body: JSON.stringify(body),
         signal: controller.signal
       });
@@ -24107,6 +24112,7 @@ async function run() {
   const policyIds = parseCsv(core.getInput("policy_ids"));
   const githubToken = core.getInput("github_token");
   const baseUrl = core.getInput("base_url").trim();
+  const providerKey = core.getInput("provider_key").trim() || void 0;
   const extensions = parseCsv(core.getInput("file_extensions")).map(
     (e) => e.startsWith(".") ? e.toLowerCase() : `.${e.toLowerCase()}`
   );
@@ -24152,7 +24158,8 @@ async function run() {
   core.info(`Evaluating ${scanTargets.length} changed file(s) against ramen-ai.`);
   const client = new RamenClient({
     apiKey,
-    ...baseUrl ? { baseUrl } : {}
+    ...baseUrl ? { baseUrl } : {},
+    ...providerKey ? { providerKey } : {}
   });
   const blocked = [];
   const errored = [];

@@ -19,6 +19,19 @@ const EVALUATE_PATH = "/api/v1/paas/evaluate";
 export interface RamenClientOptions {
   apiKey: string;
   baseUrl?: string;
+  /**
+   * BYOK (Bring Your Own Key) — LLM provider API key.
+   *
+   * Required on the Starter and Professional tiers, where the ramen-ai backend
+   * performs LLM inference using the caller's own provider key rather than a
+   * platform-managed key. When present, the value is forwarded as the
+   * `X-Provider-Key` HTTP header on every evaluation request. Omit on
+   * Enterprise tiers where managed keys are provisioned server-side.
+   *
+   * Store this value in an environment variable or secret store — never
+   * hard-code it. Example: `providerKey: process.env.OPENAI_API_KEY`
+   */
+  providerKey?: string;
   /** Override the public-key map (e.g. for test-vector verification). */
   publicKeys?: Record<string, string>;
   /** Injectable fetch for testing; defaults to global fetch. */
@@ -36,6 +49,7 @@ export interface EvaluateOptions {
 export class RamenClient {
   private readonly apiKey: string;
   private readonly baseUrl: string;
+  private readonly providerKey: string | undefined;
   private readonly publicKeys: Record<string, string>;
   private readonly fetchImpl: typeof fetch;
   private readonly timeoutMs: number;
@@ -44,6 +58,7 @@ export class RamenClient {
     if (!opts.apiKey) throw new Error("RamenClient requires a non-empty apiKey");
     this.apiKey = opts.apiKey;
     this.baseUrl = opts.baseUrl ?? DEFAULT_BASE_URL;
+    this.providerKey = opts.providerKey;
     this.publicKeys = opts.publicKeys ?? AUDIT_PUBLIC_KEYS;
     this.fetchImpl = opts.fetchImpl ?? globalThis.fetch;
     this.timeoutMs = opts.timeoutMs ?? 30_000;
@@ -73,12 +88,17 @@ export class RamenClient {
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     let envelope: { data?: EvaluationResponse };
     try {
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${this.apiKey}`,
+        "Content-Type": "application/json",
+      };
+      // BYOK: forward the caller's LLM provider key when present.
+      // Required on Starter/Professional tiers; omit on Enterprise.
+      if (this.providerKey) headers["X-Provider-Key"] = this.providerKey;
+
       const res = await this.fetchImpl(`${this.baseUrl}${EVALUATE_PATH}`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify(body),
         signal: controller.signal,
       });

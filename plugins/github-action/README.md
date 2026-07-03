@@ -62,11 +62,59 @@ the evaluation cannot run and the Action fails with a configuration error.
 
 ---
 
+## Bring Your Own Key (BYOK)
+
+The Starter and Professional tiers require you to supply your own LLM provider
+key. The Action forwards it to the ramen-ai API as the `X-Provider-Key` header.
+Without it, evaluations on these tiers return `402 Payment Required`.
+
+### 1. Add the provider key to GitHub Secrets
+
+In your repository go to **Settings → Secrets and variables → Actions → New
+repository secret** and add:
+
+| Secret name | Value |
+|---|---|
+| `RAMEN_API_KEY` | Your `ramen_ak_...` key from [ramenai.dev/pricing](https://ramenai.dev/pricing) |
+| `OPENAI_API_KEY` | Your OpenAI (or Anthropic) API key from your provider portal |
+
+### 2. Map it to the `provider_key` input in your workflow
+
+```yaml
+name: ramen-ai Compliance
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  compliance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ramen-ai PR Compliance Interceptor
+        uses: ramen-ai/ramen-ai-integrations/plugins/github-action@v1
+        with:
+          ramen_api_key: ${{ secrets.RAMEN_API_KEY }}
+          bundle_ids: "ramen__shield_core_it"
+          provider_key: ${{ secrets.OPENAI_API_KEY }}
+```
+
+**Enterprise tier:** omit `provider_key` entirely — managed keys are
+provisioned server-side and the header is not required.
+
+---
+
 ## Inputs
 
 | Input | Required | Default | Description |
 |---|---|---|---|
 | `ramen_api_key` | **yes** | — | ramen-ai PaaS API key. Always provide via a repository/organization **secret**, never inline. |
+| `provider_key` | Starter/Pro | `""` | BYOK — your LLM provider API key (e.g. OpenAI `sk-...` or Anthropic key). Required on Starter and Professional tiers; forwarded as `X-Provider-Key`. Omit on Enterprise. Use `${{ secrets.OPENAI_API_KEY }}`. |
 | `bundle_ids` | no | `""` | Comma-separated bundle slugs to evaluate against (e.g. `ramen__eu_ai_act_baseline`). The server resolves them to policy IDs. |
 | `policy_ids` | no | `""` | Comma-separated policy UUIDs for raw policy testing when no bundle is supplied. |
 | `github_token` | no | `${{ github.token }}` | Token used to read the PR diff and post the verdict comment. |

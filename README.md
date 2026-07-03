@@ -25,6 +25,42 @@ export RAMEN_API_KEY=ramen_ak_...
 
 ---
 
+## Bring Your Own Key (BYOK)
+
+The **Free Starter Tier** and **Professional Tier** are BYOK — ramen-ai uses
+your own LLM provider key to run the semantic evaluation, rather than a
+platform-managed key. This keeps inference costs transparent and under your
+control.
+
+To use these tiers, you need two keys:
+
+| Key | Purpose | Where to get it |
+|---|---|---|
+| `RAMEN_API_KEY` | Authenticates you to the ramen-ai platform | [ramenai.dev/pricing](https://ramenai.dev/pricing) |
+| `OPENAI_API_KEY` (or Anthropic equivalent) | Passed as `X-Provider-Key` so the backend can run LLM inference on your behalf | Your provider's developer portal |
+
+Set both in your environment:
+
+```bash
+export RAMEN_API_KEY=ramen_ak_...
+export OPENAI_API_KEY=sk-...        # or ANTHROPIC_API_KEY, etc.
+```
+
+And pass `providerKey` when constructing any client:
+
+```ts
+const client = new RamenClient({
+  apiKey: process.env.RAMEN_API_KEY!,
+  providerKey: process.env.OPENAI_API_KEY, // forwarded as X-Provider-Key
+});
+```
+
+**Enterprise tier** users have keys managed server-side — omit `providerKey`
+entirely. Without it, the backend will return `402 Payment Required` on
+Starter/Professional tiers.
+
+---
+
 ## Integrations
 
 ### Core Clients

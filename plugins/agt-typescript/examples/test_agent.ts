@@ -13,8 +13,16 @@
  *
  * Run it (3 steps):
  *   1. cd plugins/agt-typescript && npm install
- *   2. export RAMEN_API_KEY=ramen_ak_...      # your evaluation key
+ *   2. export RAMEN_API_KEY=ramen_ak_...    # your ramen-ai evaluation key
+ *      export OPENAI_API_KEY=sk-...         # BYOK: your LLM provider key
+ *                                           # (required on Starter/Pro tiers)
  *   3. npx tsx examples/test_agent.ts
+ *
+ * BYOK note: the Starter and Professional tiers require you to supply your own
+ * LLM provider key (OpenAI, Anthropic, etc.) via the OPENAI_API_KEY env var.
+ * This is forwarded as the X-Provider-Key header on every evaluation request.
+ * Enterprise tiers use platform-managed keys — omit OPENAI_API_KEY in that
+ * case and remove the providerKey option from the RamenClient constructor.
  */
 
 import { AgentMeshClient } from "@microsoft/agent-governance-sdk";
@@ -82,6 +90,18 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
+  // BYOK: Starter and Professional tiers require your own LLM provider key.
+  // Load it from the environment — never hard-code it.
+  // Enterprise tiers: omit this and remove providerKey from RamenClient below.
+  const providerKey = process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY;
+  if (!providerKey) {
+    console.warn(
+      "Warning: no OPENAI_API_KEY or ANTHROPIC_API_KEY found in environment.\n" +
+      "Starter/Professional tiers require a provider key (BYOK). " +
+      "If you are on an Enterprise tier, this warning can be ignored.",
+    );
+  }
+
   rule();
   console.log("ramen-ai L2 SEMANTIC FIREWALL — AGT MORSE-CODE INJECTION QUICKSTART");
   rule();
@@ -92,7 +112,12 @@ async function main(): Promise<void> {
     capabilities: ["wallet.transfer"],
     policyRules: [{ action: "*", effect: "allow" }],
   });
-  const ramen = new RamenClient({ apiKey });
+  const ramen = new RamenClient({
+    apiKey,
+    // BYOK: pass the provider key so the backend can run LLM inference on
+    // your behalf. Remove this line on Enterprise tiers.
+    ...(providerKey ? { providerKey } : {}),
+  });
   const firewall = new RamenFirewallBackend(ramen, {
     bundleIds: [BUNDLE],
     agentId: AGENT_ID,
