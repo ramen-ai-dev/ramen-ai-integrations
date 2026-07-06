@@ -12,6 +12,12 @@ to the host agent.
 
 ---
 
+## API Key
+
+To use this integration, you must mint an API Key. We offer a **Free Starter Tier** (1,000 evaluations/month, BYOK) which includes full access to our Core IT Security bundle. Mint your key at: **[https://ramenai.dev/pricing](https://ramenai.dev/pricing)**
+
+---
+
 ## Overview
 
 AGT provides the **L1** runtime governance layer: identity, policy engine,
