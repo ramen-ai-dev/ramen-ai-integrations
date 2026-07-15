@@ -2,8 +2,7 @@
   "name": "@ramen-ai/node-core",
   "version": "0.2.0",
   "description": "Agnostic Node.js HTTP core for the ramen-ai PaaS evaluation API, with V5 Ed25519 receipt verification (Web Crypto). Reusable SDK shared across ramen-ai integrations.",
-  "license": "UNLICENSED",
-  "private": true,
+  "license": "MIT",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,11 +13,15 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {},
   "devDependencies": {
