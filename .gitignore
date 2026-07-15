@@ -71,3 +71,6 @@ logs/
 
 # --- Agents ---
 AGENTS.md
+
+# --- Internal research & design documents (local context only) ---
+docs/
