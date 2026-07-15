@@ -7,7 +7,7 @@ description: >-
 author: "ramen-ai"
 branding:
   icon: "shield"
-  color: "red"
+  color: "gray-dark"
 
 inputs:
   ramen_api_key:
