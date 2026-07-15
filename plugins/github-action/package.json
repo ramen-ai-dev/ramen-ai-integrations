@@ -15,6 +15,7 @@
     "@ramen-ai/node-core": "file:../../core-clients/node"
   },
   "devDependencies": {
+    "@types/node": "^20.19.43",
     "esbuild": "^0.24.0",
     "typescript": "^5.6.0"
   },

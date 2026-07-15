@@ -138,7 +138,19 @@ async function run(): Promise<void> {
   const apiKey = core.getInput("ramen_api_key", { required: true });
   const bundleIds = parseCsv(core.getInput("bundle_ids"));
   const policyIds = parseCsv(core.getInput("policy_ids"));
-  const githubToken = core.getInput("github_token");
+  const githubToken =
+    core.getInput("github_token") ||
+    process.env.GITHUB_TOKEN ||
+    "";
+
+  if (!githubToken) {
+    core.setFailed(
+      "No GitHub token available. Pass `github_token: ${{ secrets.GITHUB_TOKEN }}` " +
+        "explicitly in your workflow's `with:` block, or ensure the GITHUB_TOKEN " +
+        "environment variable is present in the runner.",
+    );
+    return;
+  }
   const baseUrl = core.getInput("base_url").trim();
   const providerKey = core.getInput("provider_key").trim() || undefined;
   const extensions = parseCsv(core.getInput("file_extensions")).map((e) =>
