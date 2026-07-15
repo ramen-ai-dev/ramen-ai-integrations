@@ -22,6 +22,13 @@ To use this integration, you must mint an API Key. We offer a **Free Starter Tie
 
 ## Usage
 
+> **Required:** The job must declare `permissions` at **job level** and pass
+> `github_token` explicitly. A workflow-level `permissions` block is not
+> sufficient on organisations with restrictive default token settings — job-level
+> always wins. Omitting `github_token` from `with:` causes a
+> `Resource not accessible by integration` (403) crash when the action tries to
+> list PR files.
+
 Add a workflow such as `.github/workflows/ramen-compliance.yml`:
 
 ```yaml
@@ -30,27 +37,28 @@ name: ramen-ai Compliance
 on:
   pull_request:
 
-permissions:
-  contents: read          # read the PR diff
-  pull-requests: write    # post the verdict comment
-
 jobs:
   compliance:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read        # required: list changed files in the PR
+      pull-requests: write  # required: list PR files + post verdict comment
     steps:
       - uses: actions/checkout@v4
 
       - name: ramen-ai PR Compliance Interceptor
-        uses: ramen-ai/ramen-ai-integrations/plugins/github-action@v1
+        uses: ramen-ai-dev/ramen-ai-integrations/plugins/github-action@master
         with:
           ramen_api_key: ${{ secrets.RAMEN_API_KEY }}
           bundle_ids: ramen__eu_ai_act_baseline,ramen__shield_core_it
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-The `permissions` block is required: the Action needs `contents: read` to fetch
-the changed files and `pull-requests: write` to post the verdict comment. If
-your organization runs workflows with restricted default permissions, set them
-explicitly as shown.
+The `permissions` block **must be at job level** (inside `jobs.<job-id>:`, not
+at the top of the file). A partial `permissions:` block at any level silently
+drops every scope not listed, so both `contents` and `pull-requests` must appear
+together. `github_token` must be passed explicitly in `with:` — the action
+cannot rely on the `action.yml` default resolving at runtime.
 
 ### Raw policy testing (no bundle)
 
@@ -92,21 +100,21 @@ name: ramen-ai Compliance
 on:
   pull_request:
 
-permissions:
-  contents: read
-  pull-requests: write
-
 jobs:
   compliance:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read        # required: list changed files in the PR
+      pull-requests: write  # required: list PR files + post verdict comment
     steps:
       - uses: actions/checkout@v4
 
       - name: ramen-ai PR Compliance Interceptor
-        uses: ramen-ai/ramen-ai-integrations/plugins/github-action@v1
+        uses: ramen-ai-dev/ramen-ai-integrations/plugins/github-action@master
         with:
           ramen_api_key: ${{ secrets.RAMEN_API_KEY }}
           bundle_ids: "ramen__shield_core_it"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           provider_key: ${{ secrets.OPENAI_API_KEY }}
 ```
 
@@ -123,7 +131,7 @@ provisioned server-side and the header is not required.
 | `provider_key` | Starter/Pro | `""` | BYOK — your LLM provider API key (e.g. OpenAI `sk-...` or Anthropic key). Required on Starter and Professional tiers; forwarded as `X-Provider-Key`. Omit on Enterprise. Use `${{ secrets.OPENAI_API_KEY }}`. |
 | `bundle_ids` | no | `""` | Comma-separated bundle slugs to evaluate against (e.g. `ramen__eu_ai_act_baseline`). The server resolves them to policy IDs. |
 | `policy_ids` | no | `""` | Comma-separated policy UUIDs for raw policy testing when no bundle is supplied. |
-| `github_token` | no | `${{ github.token }}` | Token used to read the PR diff and post the verdict comment. |
+| `github_token` | **yes** | — | Token used to list PR files and post the verdict comment. Pass `${{ secrets.GITHUB_TOKEN }}` explicitly — do not rely on the default. The job must also declare `permissions: contents: read` and `pull-requests: write` at **job level** or the token will lack the required scopes and the action will crash with a 403. |
 | `base_url` | no | `""` | Override the ramen-ai API base URL (defaults to the production endpoint). |
 | `file_extensions` | no | `.md,.txt,.py` | Comma-separated file extensions whose added text is scanned. |
 | `fail_on_unverified_receipt` | no | `"true"` | When `true`, a verdict whose Ed25519 receipt cannot be verified is treated as a build failure (fail-closed on evidence). |
