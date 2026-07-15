@@ -166,6 +166,84 @@ API and treated as a blocking failure.
 
 ---
 
+## GitHub Platform Constraints & Troubleshooting
+
+GitHub's token security model imposes hard limits that can override your
+workflow YAML configuration. Both constraints below produce the same
+`403 Resource not accessible by integration` error, but they have different
+fixes.
+
+### 1. Repository-level token permissions
+
+By default, GitHub may issue workflow tokens with **read-only** access at the
+repository level, regardless of what `permissions:` you declare in your YAML.
+This setting is controlled outside the workflow file entirely.
+
+**Symptom:** The action crashes with `Resource not accessible by integration`
+even though your job block contains:
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+```
+
+**Fix:** Navigate to your repository's
+**Settings → Actions → General → Workflow permissions** and select
+**"Read and write permissions"**. This sets the repository-level default that
+GitHub applies when issuing the `GITHUB_TOKEN` for workflow runs.
+
+---
+
+### 2. Fork security limits (`pull_request` event)
+
+For security reasons, GitHub **automatically downgrades the `GITHUB_TOKEN` to
+read-only** for `pull_request` events that originate from a forked repository,
+regardless of your `permissions:` block. This is a hard platform limit — it
+cannot be overridden by workflow configuration alone.
+
+This action requires write access to post the cryptographic receipt comment on
+the pull request. Automated PR commenting is therefore **only supported** on:
+
+- **Internal branches** within the same repository, or
+- Workflows using the `pull_request_target` event (runs in the base repo
+  context, preserving write access and secret access even for fork PRs)
+
+**Fix for fork PRs:** Switch the trigger from `pull_request` to
+`pull_request_target`:
+
+```yaml
+on:
+  pull_request_target:        # ← replaces pull_request
+    types: [opened, synchronize, reopened]
+
+jobs:
+  evaluate-ai-prompts:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Evaluate PR with Ramen AI
+        uses: ramen-ai-dev/ramen-ai-integrations/plugins/github-action@master
+        with:
+          ramen_api_key: ${{ secrets.RAMEN_API_KEY }}
+          bundle_ids: "ramen__shield_core_it"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+```
+
+> **Security note:** `pull_request_target` runs with base-repo write access and
+> exposes secrets even on fork PRs. This is safe for this action because it
+> reads the PR diff as text via the API — it does not check out or execute any
+> code from the fork. Never add steps that install or run fork-provided code in
+> the same job.
+
+---
+
 ## Data Privacy & Security
 
 This Action transmits pull request content to an external evaluation API. The
