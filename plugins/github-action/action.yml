@@ -52,8 +52,8 @@ inputs:
       BYOK (Bring Your Own Key) — your LLM provider API key (e.g. an OpenAI or
       Anthropic key). Required on the Starter and Professional tiers, where
       ramen-ai uses your own key to run LLM inference rather than a
-      platform-managed key. Omit on Enterprise. Always provide via a secret —
-      never inline. Example: ${{ secrets.OPENAI_API_KEY }}
+      platform-managed key. Omit on Enterprise. Store the key as a GitHub
+      Secret and pass it via your workflow file — never inline a key value here.
     required: false
     default: ""
 
