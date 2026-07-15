@@ -51,8 +51,7 @@ class RamenClient:
         *,
         base_url: str = _DEFAULT_BASE_URL,
         timeout: float = _DEFAULT_TIMEOUT,
-    ) -> None:
-        if not api_key:
+    ) -> None:        if not api_key:
             raise ValueError("api_key must be a non-empty string.")
         self._api_key = api_key
         self._http = httpx.Client(
@@ -75,6 +74,8 @@ class RamenClient:
         bundle_ids: list[str] | None = None,
         policy_ids: list[str] | None = None,
         context: dict[str, str] | None = None,
+        provider_key: str | None = None,
+        provider_name: str | None = None,
     ) -> dict[str, Any]:
         """
         Evaluate *input_text* against the specified policies or bundles.
@@ -92,6 +93,17 @@ class RamenClient:
             Explicit policy UUIDs to evaluate in parallel.
         context:
             Optional string-keyed metadata forwarded to the audit log.
+        provider_key:
+            BYOK — the caller's LLM provider API key (e.g. an OpenAI or
+            Anthropic key). Required on Starter/Professional tiers; omit on
+            Enterprise where managed keys are provisioned server-side. When
+            present, forwarded as the ``X-Provider-Key`` HTTP header.
+        provider_name:
+            BYOK — the LLM provider to route inference to when *provider_key*
+            is supplied. Accepted values: ``"openai"`` (default),
+            ``"anthropic"``, ``"google"``, ``"synthetic"``, ``"hyperbolic"``.
+            Forwarded as the ``X-Provider`` HTTP header. Has no effect when
+            *provider_key* is absent.
 
         Returns
         -------
@@ -142,7 +154,20 @@ class RamenClient:
         if context:
             body["context"] = context
 
-        response = self._http.post(_EVALUATE_PATH, json=body)
+        # BYOK: inject per-request provider headers when present.
+        # X-Provider-Key is required on Starter/Professional tiers.
+        # X-Provider selects the inference backend (default: openai).
+        # These are passed as request-level overrides rather than shared
+        # client headers so one caller's key never bleeds into another's request.
+        extra_headers: dict[str, str] = {}
+        if provider_key:
+            extra_headers["X-Provider-Key"] = provider_key
+            if provider_name:
+                extra_headers["X-Provider"] = provider_name
+
+        response = self._http.post(
+            _EVALUATE_PATH, json=body, headers=extra_headers if extra_headers else None
+        )
         response.raise_for_status()
 
         envelope: dict[str, Any] = response.json()

@@ -32,6 +32,20 @@ export interface RamenClientOptions {
    * hard-code it. Example: `providerKey: process.env.OPENAI_API_KEY`
    */
   providerKey?: string;
+  /**
+   * BYOK — LLM provider name. Selects which provider the backend routes
+   * the inference request to when `providerKey` is present.
+   *
+   * Accepted values: `"openai"` (default) | `"anthropic"` | `"google"` |
+   * `"synthetic"` | `"hyperbolic"`.
+   *
+   * When omitted the backend defaults to `openai`. Has no effect when
+   * `providerKey` is absent (managed-inference tiers ignore this header).
+   *
+   * Example: `providerName: "anthropic"` paired with an Anthropic `sk-ant-…`
+   * key in `providerKey`.
+   */
+  providerName?: string;
   /** Override the public-key map (e.g. for test-vector verification). */
   publicKeys?: Record<string, string>;
   /** Injectable fetch for testing; defaults to global fetch. */
@@ -50,6 +64,7 @@ export class RamenClient {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly providerKey: string | undefined;
+  private readonly providerName: string | undefined;
   private readonly publicKeys: Record<string, string>;
   private readonly fetchImpl: typeof fetch;
   private readonly timeoutMs: number;
@@ -59,6 +74,7 @@ export class RamenClient {
     this.apiKey = opts.apiKey;
     this.baseUrl = opts.baseUrl ?? DEFAULT_BASE_URL;
     this.providerKey = opts.providerKey;
+    this.providerName = opts.providerName;
     this.publicKeys = opts.publicKeys ?? AUDIT_PUBLIC_KEYS;
     this.fetchImpl = opts.fetchImpl ?? globalThis.fetch;
     this.timeoutMs = opts.timeoutMs ?? 30_000;
@@ -94,7 +110,12 @@ export class RamenClient {
       };
       // BYOK: forward the caller's LLM provider key when present.
       // Required on Starter/Professional tiers; omit on Enterprise.
-      if (this.providerKey) headers["X-Provider-Key"] = this.providerKey;
+      if (this.providerKey) {
+        headers["X-Provider-Key"] = this.providerKey;
+        // Optionally select the target provider (default: openai).
+        // Only meaningful alongside a providerKey; ignored on managed tiers.
+        if (this.providerName) headers["X-Provider"] = this.providerName;
+      }
 
       const res = await this.fetchImpl(`${this.baseUrl}${EVALUATE_PATH}`, {
         method: "POST",
