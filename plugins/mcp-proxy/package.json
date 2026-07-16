@@ -1,12 +1,12 @@
 {
   "name": "@ramen-ai/mcp-shield-proxy",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Universal MCP stdio proxy that intercepts tools/call JSON-RPC messages and evaluates them against the ramen-ai L2 Semantic Firewall before forwarding to the downstream MCP server.",
   "license": "MIT",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "mcp-shield-proxy": "./dist/index.js"
+    "mcp-shield-proxy": "dist/index.js"
   },
   "files": [
     "dist",
