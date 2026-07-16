@@ -1,7 +1,7 @@
 # @ramen-ai/agt-middleware
 
 <p align="center">
-  <img src="../../assets/ramen-logo.svg" alt="ramen-ai" width="100"/>
+  <img src="../../assets/ramen-logo.png" alt="ramen-ai" width="100"/>
 </p>
 
 **An L2 Semantic Firewall integration for the Microsoft Agent Governance Toolkit (AGT).**

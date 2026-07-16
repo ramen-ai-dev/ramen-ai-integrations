@@ -1,7 +1,7 @@
 # @ramen-ai/mcp-shield-proxy
 
 <p align="center">
-  <img src="../../assets/ramen-logo.svg" alt="ramen-ai" width="100"/>
+  <img src="https://raw.githubusercontent.com/ramen-ai-dev/ramen-ai-integrations/master/assets/ramen-logo.png" alt="ramen-ai" width="100"/>
 </p>
 
 A universal MCP stdio proxy that intercepts **tools/call** JSON-RPC messages

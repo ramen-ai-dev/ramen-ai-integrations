@@ -1,7 +1,7 @@
 # ramen-ai-core (Python)
 
 <p align="center">
-  <img src="../../assets/ramen-logo.svg" alt="ramen-ai" width="100"/>
+  <img src="../../assets/ramen-logo.png" alt="ramen-ai" width="100"/>
 </p>
 
 Synchronous Python HTTP client and V5 Ed25519 receipt verifier for the
