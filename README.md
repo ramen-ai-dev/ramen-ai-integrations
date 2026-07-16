@@ -4,109 +4,125 @@
   <img src="assets/ramen-logo.png" alt="ramen-ai" width="120"/>
 </p>
 
-Official SDK clients, middleware plugins, and CI/CD tooling for the
-[ramen-ai](https://ramenai.dev) PaaS evaluation API — a semantic compliance
-firewall for AI agents, enforced at the tool-call layer with cryptographic
-receipts.
+<p align="center"><strong>The deterministic execution boundary for AI agents.</strong></p>
+
+---
+
+## The Problem
+
+LLMs cannot police their own tools. If your agent is connected to a database,
+a prompt injection hidden in a PDF can drop your tables. If it is connected to
+a payment API, a Morse-encoded instruction buried in a retrieved document can
+drain a wallet. Standard keyword filters catch basic syntax. They fail against
+encoded payloads, corporate jargon, and multi-criterion composite attacks.
+
+**We built the deterministic execution boundary to stop it** — a semantic
+firewall that evaluates every tool call against your compliance policies
+before execution, signs every verdict with an Ed25519 receipt, and returns a
+steering instruction that is auditable, reproducible, and legally defensible.
+
+---
+
+<p align="center">
+  <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/langchain-python">
+    <img src="https://img.shields.io/badge/LangChain-1C3C3C?style=flat&logo=langchain&logoColor=white" alt="LangChain"/>
+  </a>
+  &nbsp;
+  <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/pydantic-ai">
+    <img src="https://img.shields.io/badge/PydanticAI-E92063?style=flat&logo=pydantic&logoColor=white" alt="PydanticAI"/>
+  </a>
+  &nbsp;
+  <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/mcp-proxy">
+    <img src="https://img.shields.io/badge/MCP-6B21A8?style=flat&logo=anthropic&logoColor=white" alt="MCP"/>
+  </a>
+  &nbsp;
+  <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/agt-typescript">
+    <img src="https://img.shields.io/badge/Microsoft%20AGT-0078D4?style=flat&logo=microsoft&logoColor=white" alt="Microsoft AGT"/>
+  </a>
+  &nbsp;
+  <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/github-action">
+    <img src="https://img.shields.io/badge/GitHub%20Actions-2088FF?style=flat&logo=githubactions&logoColor=white" alt="GitHub Actions"/>
+  </a>
+</p>
+
+---
+
+## Can you bypass it?
+
+Standard safety filters catch basic syntax. They fail against encoded payloads
+and corporate jargon. We challenge you to bypass our semantic firewall using
+the zero-day evasion vectors in our official **[Red Team Guide](RED_TEAM_GUIDE.md)**.
+
+Below is the Grok/Bankr heist: a `3,000,000,000 DRB` transfer instruction
+encoded in Morse code, hidden inside a retrieved document. The agent decoded
+it. The firewall caught it — pre-execution, with a verified Ed25519 receipt —
+before a single token moved.
+
+<p align="center">
+  <img src="assets/grok-bankr.png" alt="ramen-ai intercepting the Grok/Bankr Morse-code heist pre-execution" width="720"/>
+</p>
 
 ---
 
 ## Getting Started
 
-To use these integrations, you must mint an API key.
+To use these integrations, you must mint an API Key.
 
 We offer a **Free Starter Tier** (1,000 evaluations/month, BYOK) which includes
 full access to our Core IT Security bundle. Mint your key at:
 
 ### [https://ramenai.dev/pricing](https://ramenai.dev/pricing)
 
-Once you have a key, set it as an environment variable and pick the integration
-that fits your stack:
+### BYOK — Bring Your Own Key
 
-```bash
-export RAMEN_API_KEY=ramen_ak_...
-```
-
----
-
-## Bring Your Own Key (BYOK)
-
-The **Free Starter Tier** and **Professional Tier** are BYOK — ramen-ai uses
-your own LLM provider key to run the semantic evaluation, rather than a
-platform-managed key. This keeps inference costs transparent and under your
-control.
-
-To use these tiers, you need two keys:
+The Starter and Professional tiers use your own LLM provider key for inference.
+You need two keys:
 
 | Key | Purpose | Where to get it |
 |---|---|---|
 | `RAMEN_API_KEY` | Authenticates you to the ramen-ai platform | [ramenai.dev/pricing](https://ramenai.dev/pricing) |
-| `OPENAI_API_KEY` (or Anthropic equivalent) | Passed as `X-Provider-Key` so the backend can run LLM inference on your behalf | Your provider's developer portal |
-
-Set both in your environment:
+| `OPENAI_API_KEY` (or Anthropic equivalent) | Forwarded as `X-Provider-Key` for LLM inference | Your provider's developer portal |
 
 ```bash
 export RAMEN_API_KEY=ramen_ak_...
 export OPENAI_API_KEY=sk-...        # or ANTHROPIC_API_KEY, etc.
 ```
 
-And pass `providerKey` when constructing any client:
-
-```ts
-const client = new RamenClient({
-  apiKey: process.env.RAMEN_API_KEY!,
-  providerKey: process.env.OPENAI_API_KEY, // forwarded as X-Provider-Key
-});
-```
-
 **Enterprise tier** users have keys managed server-side — omit `providerKey`
-entirely. Without it, the backend will return `402 Payment Required` on
-Starter/Professional tiers.
+entirely.
 
 ---
 
 ## Integrations
 
-### Core Clients
+### Core SDKs
 
-Portable HTTP clients with V5 Ed25519 receipt verification built in. Use these
-as the foundation for **custom integrations** — wrapping any agent framework,
-message queue, API gateway, or proprietary orchestration layer that isn't
-covered by the plugins above.
+Use these as the foundation for custom integrations across any framework,
+queue, or gateway not covered by the plugins below.
 
 | Package | Language | Path | Description |
 |---|---|---|---|
-| `@ramen-ai/node-core` | TypeScript / Node.js ≥ 18 | [`core-clients/node/`](core-clients/node/) | Zero-dependency HTTP client using Web Crypto. Covers `RamenClient`, BYOK (`providerKey` / `providerName`), standalone `verifyReceipt`, full TypeScript types, and injectable `fetchImpl` for testing. **[→ Full SDK docs](core-clients/node/README.md)** |
-| `ramen-ai-core` | Python ≥ 3.10 | [`core-clients/python/`](core-clients/python/) | Synchronous `httpx` client with `cryptography` Ed25519 verification. Covers `RamenClient`, per-call BYOK (`provider_key` / `provider_name`), standalone `verify_receipt`, and `pytest-httpx` test patterns. **[→ Full SDK docs](core-clients/python/README.md)** |
-
-Both SDKs are also the underlying layer used by all plugins — any custom
-integration you build on them will be compatible with the same bundles, policy
-IDs, and receipt format used by the AGT middleware, LangChain handler, and MCP
-proxy.
-
----
+| `@ramen-ai/node-core` | TypeScript / Node.js ≥ 18 | [`core-clients/node/`](core-clients/node/) | Zero-dependency HTTP client using Web Crypto. Covers `RamenClient`, BYOK, standalone `verifyReceipt`, and injectable `fetchImpl` for testing. **[→ Full SDK docs](core-clients/node/README.md)** |
+| `ramen-ai-core` | Python ≥ 3.10 | [`core-clients/python/`](core-clients/python/) | Synchronous `httpx` client with `cryptography` Ed25519 verification. Per-call BYOK, standalone `verify_receipt`, and `pytest-httpx` test patterns. **[→ Full SDK docs](core-clients/python/README.md)** |
 
 ### Plugins
 
-Drop-in middleware and CI/CD tooling that embed the compliance firewall into
-your existing infrastructure with minimal configuration.
-
 | Plugin | Platform | Path | Description |
 |---|---|---|---|
-| `agt-typescript` | Microsoft Agent Governance Toolkit | [`plugins/agt-typescript/`](plugins/agt-typescript/) | TypeScript middleware that wires ramen-ai in as an AGT `ExternalPolicyBackend`. Intercepts agent tool calls pre-execution, verifies receipts, and logs to the AGT audit chain. |
-| `github-action` | GitHub Actions | [`plugins/github-action/`](plugins/github-action/) | CI/CD action that scans pull request diffs for system-prompt and policy instruction changes and fails the build on a `[BLOCKED]` verdict — posting a cryptographically-receipted comment on the PR. |
-| `langchain-python` | LangChain (Python) | [`plugins/langchain-python/`](plugins/langchain-python/) | Python `BaseCallbackHandler` that intercepts LangChain agent tool calls pre-execution and halts the chain on a `[BLOCKED]` verdict. |
-| `pydantic-ai` | PydanticAI (Python) | [`plugins/pydantic-ai/`](plugins/pydantic-ai/) | PydanticAI `args_validator` factory that intercepts tool calls after schema validation and halts the agent run on a `[BLOCKED]` verdict. |
-| `mcp-proxy` | MCP stdio (universal) | [`plugins/mcp-proxy/`](plugins/mcp-proxy/) | Universal MCP stdio proxy that intercepts `tools/call` JSON-RPC messages at the transport layer and blocks malicious payloads before they reach any downstream MCP server. Works with Claude Desktop and any stdio MCP client. |
+| `agt-typescript` | Microsoft AGT | [`plugins/agt-typescript/`](plugins/agt-typescript/) | TypeScript middleware wired as an AGT `ExternalPolicyBackend`. Intercepts tool calls pre-execution, verifies receipts, logs to the AGT audit chain. |
+| `github-action` | GitHub Actions | [`plugins/github-action/`](plugins/github-action/) | Scans PR diffs for system-prompt modifications, evaluates against compliance policies, fails CI on `[BLOCKED]` — with a cryptographic receipt comment on the PR. |
+| `langchain-python` | LangChain (Python) | [`plugins/langchain-python/`](plugins/langchain-python/) | `BaseCallbackHandler` that intercepts LangChain tool calls pre-execution and halts the chain on `[BLOCKED]`. |
+| `pydantic-ai` | PydanticAI (Python) | [`plugins/pydantic-ai/`](plugins/pydantic-ai/) | `args_validator` factory that intercepts tool calls after schema validation and halts the agent run on `[BLOCKED]`. |
+| `mcp-proxy` | MCP stdio (universal) | [`plugins/mcp-proxy/`](plugins/mcp-proxy/) | Universal stdio proxy intercepting `tools/call` JSON-RPC at the transport layer. Works with Claude Desktop and any stdio MCP client. |
 
 ---
 
 ## How it works
 
 Every evaluation returns a **V5 Ed25519 cryptographic receipt** — a signed,
-self-describing record that binds the verdict to a SHA-256 hash of your input.
-Receipts are verified locally by each client against the published public key,
-so no trust in the API server is required to confirm a verdict is authentic.
+self-describing record binding the verdict to a SHA-256 hash of your input.
+Receipts are verified locally against the published public key: no trust in
+the API server is required.
 
 ```
 Your agent  →  ramen-ai middleware  →  POST /api/v1/paas/evaluate
@@ -121,31 +137,14 @@ Your agent  →  ramen-ai middleware  →  POST /api/v1/paas/evaluate
 
 ---
 
-## Repository structure
-
-```
-/
-├── core-clients/
-│   ├── node/            # @ramen-ai/node-core  — TypeScript SDK
-│   └── python/          # ramen-ai             — Python SDK
-├── plugins/
-│   ├── agt-typescript/  # Microsoft AGT middleware
-│   ├── github-action/   # GitHub Actions CI/CD interceptor
-│   ├── langchain-python/ # LangChain Python callback handler
-│   ├── pydantic-ai/     # PydanticAI args_validator middleware
-│   └── mcp-proxy/       # Universal MCP stdio transport interceptor
-├── .github/
-│   └── workflows/       # Self-testing CI workflow
-└── AGENTS.md            # Engineering protocol (local only — git-ignored)
-```
-
----
-
 ## Bundles
 
-The Free Starter Tier includes the **Core IT Security** bundle
-(`ramen__shield_core_it`). Additional regulatory bundles are available on paid
-tiers:
+Use `bundle_ids` for **macro-level Defence-in-Depth aggregation** — a single
+slug activates multiple coordinated policies across a threat domain. For
+**surgical, single-domain statutory auditing**, pass specific `policy_ids`
+directly to route to exactly one policy without other classifiers interfering.
+
+The Free Starter Tier includes the **Core IT Security** bundle:
 
 | Bundle slug | Coverage |
 |---|---|
@@ -153,3 +152,24 @@ tiers:
 | `ramen__eu_ai_act_baseline` | EU AI Act Articles 5, 10, and 50 — prohibited practices, data governance, transparency obligations |
 
 Full bundle and policy reference: [https://ramenai.dev/pricing](https://ramenai.dev/pricing)
+
+---
+
+## Repository structure
+
+```
+/
+├── assets/                  # Shared brand and visual assets
+├── core-clients/
+│   ├── node/                # @ramen-ai/node-core  — TypeScript SDK
+│   └── python/              # ramen-ai-core        — Python SDK
+├── plugins/
+│   ├── agt-typescript/      # Microsoft AGT middleware
+│   ├── github-action/       # GitHub Actions CI/CD interceptor
+│   ├── langchain-python/    # LangChain Python callback handler
+│   ├── pydantic-ai/         # PydanticAI args_validator middleware
+│   └── mcp-proxy/           # Universal MCP stdio transport interceptor
+├── .github/
+│   └── workflows/           # CI workflows
+└── RED_TEAM_GUIDE.md        # Zero-day evasion vectors and challenge guide
+```
