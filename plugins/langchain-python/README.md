@@ -1,5 +1,9 @@
 # ramen-ai LangChain Integration
 
+<p align="center">
+  <img src="../../assets/ramen-logo.svg" alt="ramen-ai" width="100"/>
+</p>
+
 An L2 Semantic Firewall callback handler for [LangChain](https://python.langchain.com/).
 Intercepts agent tool calls pre-execution, evaluates the serialized tool
 definition and input against the ramen-ai PaaS evaluation API, and halts

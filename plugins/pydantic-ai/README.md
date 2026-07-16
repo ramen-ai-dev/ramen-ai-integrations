@@ -1,5 +1,9 @@
 # ramen-ai PydanticAI Integration
 
+<p align="center">
+  <img src="../../assets/ramen-logo.svg" alt="ramen-ai" width="100"/>
+</p>
+
 An L2 Semantic Firewall middleware for [PydanticAI](https://ai.pydantic.dev/).
 Intercepts agent tool calls pre-execution via PydanticAI's native
 `args_validator` hook, evaluates the tool name and resolved arguments against

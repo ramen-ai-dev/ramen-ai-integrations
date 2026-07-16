@@ -1,5 +1,9 @@
 # ramen-ai Integrations
 
+<p align="center">
+  <img src="assets/ramen-logo.svg" alt="ramen-ai" width="120"/>
+</p>
+
 Official SDK clients, middleware plugins, and CI/CD tooling for the
 [ramen-ai](https://ramenai.dev) PaaS evaluation API — a semantic compliance
 firewall for AI agents, enforced at the tool-call layer with cryptographic

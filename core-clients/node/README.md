@@ -1,5 +1,9 @@
 # @ramen-ai/node-core
 
+<p align="center">
+  <img src="../../assets/ramen-logo.svg" alt="ramen-ai" width="100"/>
+</p>
+
 Agnostic Node.js HTTP client and V5 Ed25519 receipt verifier for the
 [ramen-ai](https://ramenai.dev) PaaS evaluation API. The shared SDK used by all
 Node-based ramen-ai integrations (AGT middleware, GitHub Action, and custom

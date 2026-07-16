@@ -1,5 +1,9 @@
 # ramen-ai PR Compliance Interceptor
 
+<p align="center">
+  <img src="../../assets/ramen-logo.svg" alt="ramen-ai" width="100"/>
+</p>
+
 ### Block unsafe AI outputs before execution.
 
 <p align="center">

@@ -1,5 +1,9 @@
 # @ramen-ai/agt-middleware
 
+<p align="center">
+  <img src="../../assets/ramen-logo.svg" alt="ramen-ai" width="100"/>
+</p>
+
 **An L2 Semantic Firewall integration for the Microsoft Agent Governance Toolkit (AGT).**
 
 This package lets the ramen-ai semantic firewall govern any agent running under
