@@ -61,6 +61,6 @@ jobs:
           # Push the specific version tag and move the major floating tag
           git tag "$VERSION"
           git tag -f "$MAJOR"
-          git push origin HEAD:master
+          git push origin HEAD:main
           git push origin "$VERSION"
           git push -f origin "$MAJOR"
