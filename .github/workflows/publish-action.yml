@@ -52,6 +52,9 @@ jobs:
           cp -r plugins/github-action/assets/          /tmp/action-repo/assets/
           cp assets/ramen-logo.svg                     /tmp/action-repo/assets/ramen-logo.svg
 
+          # Fix asset paths: monorepo uses ../../assets/, dedicated repo uses assets/
+          sed -i 's|../../assets/|assets/|g' /tmp/action-repo/README.md
+
           cd /tmp/action-repo
           git add -A
           git diff --cached --quiet && echo "Nothing to commit" && exit 0
