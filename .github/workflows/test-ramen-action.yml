@@ -4,17 +4,14 @@ name: Test ramen-ai PR Compliance Action
 # empirically confirm it intercepts non-compliant diffs.
 on: [pull_request]
 
-# The action reads the PR diff (contents: read) and posts its verdict comment
-# (pull-requests: write). Note: for pull requests opened from a FORK, GitHub
-# withholds repository secrets, so RAMEN_API_KEY will be empty there by design —
-# this self-test is meant for same-repo branches.
-permissions:
-  contents: read
-  pull-requests: write
-
 jobs:
   compliance:
     runs-on: ubuntu-latest
+    # Permissions must be at job level — a workflow-level block is not
+    # sufficient on organisations with restrictive default token settings.
+    permissions:
+      contents: read        # required: list changed files in the PR
+      pull-requests: write  # required: list PR files + post verdict comment
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,3 +21,4 @@ jobs:
         with:
           ramen_api_key: ${{ secrets.RAMEN_API_KEY }}
           bundle_ids: "ramen__shield_core_it"
+          github_token: ${{ secrets.GITHUB_TOKEN }}

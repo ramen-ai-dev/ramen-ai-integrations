@@ -1,0 +1,66 @@
+name: Publish GitHub Action to ramen-ai-action repo
+
+# Fires when a version tag is pushed to master (e.g. action/v1.0.0).
+# Scoped prefix keeps action releases separate from SDK releases.
+on:
+  push:
+    tags:
+      - "action/v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout monorepo
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies and rebuild dist
+        working-directory: plugins/github-action
+        run: |
+          npm ci --no-audit
+          npm run build
+
+      # Push action files to the dedicated ramen-ai-action repository.
+      # Requires a repository secret: ACTION_PUBLISH_TOKEN (PAT with repo scope
+      # on ramen-ai-dev/ramen-ai-action).
+      - name: Push to ramen-ai-dev/ramen-ai-action
+        env:
+          ACTION_PUBLISH_TOKEN: ${{ secrets.ACTION_PUBLISH_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # Derive semver tag from the scoped tag (action/v1.0.0 → v1.0.0)
+          VERSION="${TAG#action/}"
+          MAJOR="v$(echo "$VERSION" | cut -d. -f1 | tr -d v)"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Clone the dedicated action repo
+          git clone "https://x-access-token:${ACTION_PUBLISH_TOKEN}@github.com/ramen-ai-dev/ramen-ai-action.git" /tmp/action-repo
+
+          # Sync only the files the action needs at its root
+          cp plugins/github-action/action.yml          /tmp/action-repo/action.yml
+          cp plugins/github-action/dist/index.js       /tmp/action-repo/dist/index.js
+          cp plugins/github-action/README.md           /tmp/action-repo/README.md
+          cp -r plugins/github-action/assets/          /tmp/action-repo/assets/
+          cp assets/ramen-logo.svg                     /tmp/action-repo/assets/ramen-logo.svg
+
+          cd /tmp/action-repo
+          git add -A
+          git diff --cached --quiet && echo "Nothing to commit" && exit 0
+
+          git commit -m "chore(release): sync action files from monorepo ${VERSION}"
+
+          # Push the specific version tag and move the major floating tag
+          git tag "$VERSION"
+          git tag -f "$MAJOR"
+          git push origin HEAD:master
+          git push origin "$VERSION"
+          git push -f origin "$MAJOR"
