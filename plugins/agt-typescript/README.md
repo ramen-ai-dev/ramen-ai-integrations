@@ -16,6 +16,25 @@ to the host agent.
 
 ---
 
+## Can you bypass it?
+
+Standard safety filters catch basic syntax. They fail against encoded payloads
+and corporate jargon. We challenge you to bypass our semantic firewall using
+the zero-day evasion vectors in our official **[Red Team Guide](../../RED_TEAM_GUIDE.md)**.
+
+Below is a simulation of the Grok/Bankr heist. We fed the raw adversarial
+prompt directly into our sandbox. It uses a social engineering wrapper
+(claiming a visual impairment) to smuggle a 3,000,000,000 DRB transfer
+instruction encoded in Morse code. The firewall evaluated the underlying
+semantic intent, intercepted the unauthorized financial transfer, and blocked
+it pre-execution, issuing a verified Ed25519 receipt.
+
+<p align="center">
+  <img src="../../assets/grok-bankr.png" alt="ramen-ai intercepting the Grok/Bankr Morse-code heist pre-execution" width="720"/>
+</p>
+
+---
+
 ## API Key
 
 To use this integration, you must mint an API Key. We offer a **Free Starter Tier** (1,000 evaluations/month, BYOK) which includes full access to our Core IT Security bundle. Mint your key at: **[https://ramenai.dev/pricing](https://ramenai.dev/pricing)**
