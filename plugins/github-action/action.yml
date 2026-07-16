@@ -1,9 +1,6 @@
 name: "ramen-ai PR Compliance Interceptor"
 description: >-
-  Scans pull request diffs for system-prompt modifications and markdown/policy
-  instructions, evaluates the added text against the ramen-ai PaaS API, and
-  fails the CI build on a BLOCKED verdict — posting a cryptographically-receipted
-  comment on the pull request.
+  PR semantic firewall. Scans AI prompt changes, evaluates against compliance policies, and fails CI with a signed receipt.
 author: "ramen-ai"
 branding:
   icon: "shield"
