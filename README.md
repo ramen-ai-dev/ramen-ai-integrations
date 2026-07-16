@@ -85,7 +85,8 @@ your existing infrastructure with minimal configuration.
 |---|---|---|---|
 | `agt-typescript` | Microsoft Agent Governance Toolkit | [`plugins/agt-typescript/`](plugins/agt-typescript/) | TypeScript middleware that wires ramen-ai in as an AGT `ExternalPolicyBackend`. Intercepts agent tool calls pre-execution, verifies receipts, and logs to the AGT audit chain. |
 | `github-action` | GitHub Actions | [`plugins/github-action/`](plugins/github-action/) | CI/CD action that scans pull request diffs for system-prompt and policy instruction changes and fails the build on a `[BLOCKED]` verdict — posting a cryptographically-receipted comment on the PR. |
-| `kong` | Kong Gateway | [`plugins/kong/`](plugins/kong/) | Lua plugin for Kong Gateway. Intercepts HTTP requests at the gateway layer and enforces compliance before traffic reaches upstream AI services. _(In progress)_ |
+| `langchain-python` | LangChain (Python) | [`plugins/langchain-python/`](plugins/langchain-python/) | Python `BaseCallbackHandler` that intercepts LangChain agent tool calls pre-execution and halts the chain on a `[BLOCKED]` verdict. |
+| `pydantic-ai` | PydanticAI (Python) | [`plugins/pydantic-ai/`](plugins/pydantic-ai/) | PydanticAI `args_validator` factory that intercepts tool calls after schema validation and halts the agent run on a `[BLOCKED]` verdict. |
 
 ---
 
@@ -119,9 +120,8 @@ Your agent  →  ramen-ai middleware  →  POST /api/v1/paas/evaluate
 ├── plugins/
 │   ├── agt-typescript/  # Microsoft AGT middleware
 │   ├── github-action/   # GitHub Actions CI/CD interceptor
-│   └── kong/            # Kong Gateway Lua plugin
-├── docs/
-│   └── research/        # Integration design blueprints
+│   ├── langchain-python/ # LangChain Python callback handler
+│   └── pydantic-ai/     # PydanticAI args_validator middleware
 ├── .github/
 │   └── workflows/       # Self-testing CI workflow
 └── AGENTS.md            # Engineering protocol (local only — git-ignored)
