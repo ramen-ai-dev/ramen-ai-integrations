@@ -3,7 +3,7 @@
 ### Block unsafe AI outputs before execution.
 
 <p align="center">
-  <img src="assets/demo.svg" alt="ramen-ai intercepting a non-compliant pull request" width="680"/>
+  <img src="assets/github-actions.png" alt="ramen-ai intercepting a non-compliant pull request" width="680"/>
 </p>
 
 A GitHub Action that scans pull request diffs for AI prompt modifications,
