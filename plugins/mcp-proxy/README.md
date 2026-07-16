@@ -71,6 +71,8 @@ npm install -g @ramen-ai/mcp-shield-proxy
 npx @ramen-ai/mcp-shield-proxy --help
 ```
 
+**npm:** [https://www.npmjs.com/package/@ramen-ai/mcp-shield-proxy](https://www.npmjs.com/package/@ramen-ai/mcp-shield-proxy)
+
 ---
 
 ## Claude Desktop configuration
