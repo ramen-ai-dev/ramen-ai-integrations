@@ -18,7 +18,7 @@
     "test": "node --experimental-vm-modules node_modules/.bin/vitest run"
   },
   "dependencies": {
-    "@ramen-ai/node-core": "file:../../core-clients/node"
+    "@ramen-ai/node-core": "^0.2.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
