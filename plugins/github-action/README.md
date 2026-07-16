@@ -69,6 +69,10 @@ instruction encoded in Morse code. The firewall evaluated the underlying
 semantic intent, intercepted the unauthorized financial transfer, and blocked
 it pre-execution, issuing a verified Ed25519 receipt.
 
+<p align="center">
+  <img src="../../assets/grok-bankr.png" alt="ramen-ai intercepting the Grok/Bankr Morse-code heist pre-execution" width="720"/>
+</p>
+
 ---
 
 ## The Four Pillars
