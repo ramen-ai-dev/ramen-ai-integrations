@@ -69,14 +69,20 @@ Starter/Professional tiers.
 
 ### Core Clients
 
-Portable, dependency-free HTTP clients with V5 Ed25519 receipt verification
-built in. Use these as the foundation for custom integrations or as a direct
-API client in your own tooling.
+Portable HTTP clients with V5 Ed25519 receipt verification built in. Use these
+as the foundation for **custom integrations** — wrapping any agent framework,
+message queue, API gateway, or proprietary orchestration layer that isn't
+covered by the plugins above.
 
 | Package | Language | Path | Description |
 |---|---|---|---|
-| `@ramen-ai/node-core` | TypeScript / Node.js ≥18 | [`core-clients/node/`](core-clients/node/) | Agnostic HTTP client with Web Crypto Ed25519 receipt verification. The shared SDK used by all Node-based plugins. |
-| `ramen-ai` | Python ≥3.11 | [`core-clients/python/`](core-clients/python/) | Agnostic HTTP client with `cryptography` Ed25519 receipt verification. |
+| `@ramen-ai/node-core` | TypeScript / Node.js ≥ 18 | [`core-clients/node/`](core-clients/node/) | Zero-dependency HTTP client using Web Crypto. Covers `RamenClient`, BYOK (`providerKey` / `providerName`), standalone `verifyReceipt`, full TypeScript types, and injectable `fetchImpl` for testing. **[→ Full SDK docs](core-clients/node/README.md)** |
+| `ramen-ai-core` | Python ≥ 3.10 | [`core-clients/python/`](core-clients/python/) | Synchronous `httpx` client with `cryptography` Ed25519 verification. Covers `RamenClient`, per-call BYOK (`provider_key` / `provider_name`), standalone `verify_receipt`, and `pytest-httpx` test patterns. **[→ Full SDK docs](core-clients/python/README.md)** |
+
+Both SDKs are also the underlying layer used by all plugins — any custom
+integration you build on them will be compatible with the same bundles, policy
+IDs, and receipt format used by the AGT middleware, LangChain handler, and MCP
+proxy.
 
 ---
 
