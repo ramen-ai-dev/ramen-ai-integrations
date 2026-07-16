@@ -233,10 +233,21 @@ export async function runProxy(
       resolve({ exitCode: 1 });
     });
 
-    // When the client closes its stdin, close child stdin too
+    // When the client closes its stdin, wait for all in-flight evaluations to
+    // settle before closing child stdin. Without this, `cat`-style piping closes
+    // stdin before the async evaluate() call returns, causing the child to exit
+    // before the blocked response can be written.
     rl.on("close", () => {
-      log.debug("stdin closed — closing child stdin");
-      child.stdin!.end();
+      log.debug("stdin closed — waiting for in-flight evaluations before closing child stdin");
+      const drain = async () => {
+        // Poll until pending is empty (all evaluations have completed)
+        while (pending.size > 0) {
+          await new Promise((r) => setTimeout(r, 10));
+        }
+        log.debug("all evaluations settled — closing child stdin");
+        child.stdin!.end();
+      };
+      void drain();
     });
   });
 }
