@@ -44,16 +44,25 @@ jobs:
 
           # Clone the dedicated action repo
           git clone "https://x-access-token:${ACTION_PUBLISH_TOKEN}@github.com/ramen-ai-dev/ramen-ai-action.git" /tmp/action-repo
+          mkdir -p /tmp/action-repo/assets /tmp/action-repo/dist
 
-          # Sync only the files the action needs at its root
-          cp plugins/github-action/action.yml          /tmp/action-repo/action.yml
-          cp plugins/github-action/dist/index.js       /tmp/action-repo/dist/index.js
-          cp plugins/github-action/README.md           /tmp/action-repo/README.md
-          cp -r plugins/github-action/assets/          /tmp/action-repo/assets/
-          cp assets/ramen-logo.svg                     /tmp/action-repo/assets/ramen-logo.svg
+          # Core action files
+          cp plugins/github-action/action.yml       /tmp/action-repo/action.yml
+          cp plugins/github-action/dist/index.js    /tmp/action-repo/dist/index.js
+          cp plugins/github-action/README.md        /tmp/action-repo/README.md
 
-          # Fix asset paths: monorepo uses ../../assets/, dedicated repo uses assets/
+          # Plugin-level assets (PR screenshot etc.)
+          cp plugins/github-action/assets/*         /tmp/action-repo/assets/
+
+          # Shared repo-root assets (logo PNG, heist image, etc.)
+          cp assets/ramen-logo.png                  /tmp/action-repo/assets/ramen-logo.png
+          cp assets/grok-bankr.png                  /tmp/action-repo/assets/grok-bankr.png
+
+          # Path rewrites for the dedicated repo's flat layout:
+          # 1. Monorepo relative asset paths → dedicated repo asset paths
           sed -i 's|../../assets/|assets/|g' /tmp/action-repo/README.md
+          # 2. Monorepo relative RED_TEAM_GUIDE link → absolute GitHub URL
+          sed -i 's|../../RED_TEAM_GUIDE\.md|https://github.com/ramen-ai-dev/ramen-ai-integrations/blob/master/RED_TEAM_GUIDE.md|g' /tmp/action-repo/README.md
 
           cd /tmp/action-repo
           git add -A
