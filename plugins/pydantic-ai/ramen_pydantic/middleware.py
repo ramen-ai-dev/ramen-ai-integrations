@@ -69,6 +69,7 @@ def ramen_firewall(
     bundle_ids: list[str] | None = None,
     policy_ids: list[str] | None = None,
     provider_key: str | None = None,
+    provider_name: str | None = None,
     base_url: str | None = None,
     timeout: float = 30.0,
     require_receipt_verified: bool = True,
@@ -137,13 +138,13 @@ def ramen_firewall(
     client_kwargs: dict[str, Any] = {"api_key": api_key, "timeout": timeout}
     if base_url:
         client_kwargs["base_url"] = base_url
-    if provider_key:
-        client_kwargs["provider_key"] = provider_key
 
     client = RamenClient(**client_kwargs)
     _bundle_ids = list(bundle_ids) if bundle_ids else []
     _policy_ids = list(policy_ids) if policy_ids else []
     _context: dict[str, str] = dict(context) if context else {}
+    _provider_key: str | None = provider_key
+    _provider_name: str | None = provider_name
 
     async def _args_validator(ctx: RunContext[Any], **args_dict: Any) -> None:
         """ramen-ai firewall args_validator — intercepts the tool call pre-execution."""
@@ -169,6 +170,8 @@ def ramen_firewall(
                     "tool_name": tool_name,
                     **({"run_id": str(ctx.run_id)} if ctx.run_id else {}),
                 },
+                provider_key=_provider_key,
+                provider_name=_provider_name,
             )
         except Exception as exc:
             # Fail-closed: any infrastructure failure is treated as a BLOCK.
