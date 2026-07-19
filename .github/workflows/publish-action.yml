@@ -16,10 +16,10 @@ jobs:
       - name: Checkout monorepo
         uses: actions/checkout@v4
 
-      - name: Set up Node 22
+      - name: Set up Node 24
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
 
       - name: Install dependencies and rebuild dist
         working-directory: plugins/github-action
