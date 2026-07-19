@@ -51,7 +51,8 @@ class RamenClient:
         *,
         base_url: str = _DEFAULT_BASE_URL,
         timeout: float = _DEFAULT_TIMEOUT,
-    ) -> None:        if not api_key:
+    ) -> None:
+        if not api_key:
             raise ValueError("api_key must be a non-empty string.")
         self._api_key = api_key
         self._http = httpx.Client(
