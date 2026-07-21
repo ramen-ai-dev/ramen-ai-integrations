@@ -35,9 +35,13 @@
     "@microsoft/agent-governance-sdk": "^4.0.0",
     "typescript": "^5.6.0",
     "tsx": "^4.19.0",
-    "vitest": "^2.1.0"
+    "vitest": "^3.2.4"
   },
   "engines": {
     "node": ">=24"
+  },
+  "overrides": {
+    "js-yaml": "4.3.0",
+    "esbuild": "0.25.5"
   }
 }
