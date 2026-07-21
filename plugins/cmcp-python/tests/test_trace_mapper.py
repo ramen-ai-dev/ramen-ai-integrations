@@ -170,13 +170,13 @@ class TestBuildTraceRecord:
         f = _load("vector1_allowed.json")
         receipt = f["receipt"]
         assert v1_record["subject"] == (
-            f"urn:ramen-ai:receipt:{receipt['kid']}:{receipt['id']}"
+            f"spiffe://ramenai.dev/evaluation/{receipt['id']}"
         )
 
-    def test_policy_bundle_hash_is_payload_hash(self, v1_record):
+    def test_policy_bundle_hash_is_prefixed_payload_hash(self, v1_record):
         f = _load("vector1_allowed.json")
         payload = json.loads(f["receipt"]["canonical_payload"])
-        assert v1_record["policy"]["bundle_hash"] == payload["payload_hash"]
+        assert v1_record["policy"]["bundle_hash"] == f"sha256:{payload['payload_hash']}"
 
     def test_policy_version_is_schema_version(self, v1_record):
         assert v1_record["policy"]["version"] == "5.0"
@@ -188,10 +188,10 @@ class TestBuildTraceRecord:
         f = _load("vector1_allowed.json")
         assert v1_record["runtime"]["measurement"] == f["receipt"]["id"]
 
-    def test_tool_transcript_hash_is_payload_hash(self, v1_record):
+    def test_tool_transcript_hash_is_prefixed_payload_hash(self, v1_record):
         f = _load("vector1_allowed.json")
         payload = json.loads(f["receipt"]["canonical_payload"])
-        assert v1_record["tool_transcript"]["hash"] == payload["payload_hash"]
+        assert v1_record["tool_transcript"]["hash"] == f"sha256:{payload['payload_hash']}"
 
     def test_transcript_uri_encodes_receipt_id(self, v1_record):
         f = _load("vector1_allowed.json")
@@ -265,5 +265,5 @@ class TestBuildTraceRecord:
         tampered_record = build_trace_record(
             tampered_receipt, iat=1_800_000_000, jwk=_dummy_jwk()
         )
-        assert tampered_record["policy"]["bundle_hash"] == "a" * 64
+        assert tampered_record["policy"]["bundle_hash"] == f"sha256:{'a' * 64}"
         assert original_record["policy"]["bundle_hash"] != tampered_record["policy"]["bundle_hash"]

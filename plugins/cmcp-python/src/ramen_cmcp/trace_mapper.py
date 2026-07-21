@@ -12,17 +12,17 @@ TRACE field                         ← ramen-ai V5 source
 ────────────────────────────────────────────────────────────────────────────────
 eat_profile                         constant "tag:agentrust.io,2026:trace-v0.1"
 iat                                 caller-supplied (int, Unix seconds)
-subject                             "urn:ramen-ai:receipt:<kid>:<receipt.id>"
+subject                             "spiffe://ramenai.dev/evaluation/<receipt.id>"
 cnf.jwk                             caller-supplied (public JWK for signing)
-policy.bundle_hash                  canonical_payload.payload_hash
-                                    (SHA-256 of the evaluated input, hex)
+policy.bundle_hash                  "sha256:" + canonical_payload.payload_hash
+                                    (SHA-256 of the evaluated input, prefixed)
 policy.enforcement_mode             "enforce"
 policy.version                      canonical_payload.schema_version ("5.0")
 runtime.measurement                 receipt.id  (UUID that uniquely names this
                                     evaluation event)
 runtime.platform                    "software-only"
 tool_transcript.call_count          1  (one evaluation per record)
-tool_transcript.hash                canonical_payload.payload_hash
+tool_transcript.hash                "sha256:" + canonical_payload.payload_hash
 tool_transcript.transcript_uri      "urn:ramen-ai:evaluation:<receipt.id>"
 appraisal.policy_ref                comma-joined canonical_payload.policy_ids
 appraisal.status                    "affirming" if verdict==1 else "denying"
@@ -83,6 +83,14 @@ def build_trace_record(
     statutory_anchors: list[str] = payload.get("statutory_anchors", [])
     steering: str = payload.get("steering", "")
 
+    # TR-POL-001: bundle_hash must carry an algorithm prefix (sha256:<hex>).
+    # The V5 payload_hash is a raw 64-char hex SHA-256; prefix it.
+    prefixed_hash = f"sha256:{payload_hash}"
+
+    # TR-ENV: subject must be a SPIFFE or DID URI.
+    # We use the ramen-ai trust domain with the receipt UUID as the workload ID.
+    subject = f"spiffe://ramenai.dev/evaluation/{receipt_id}"
+
     appraisal: dict[str, Any] = {
         "policy_ref": ", ".join(policy_ids),
         "status": "affirming" if verdict == 1 else "denying",
@@ -97,10 +105,10 @@ def build_trace_record(
     return {
         "eat_profile": EAT_PROFILE,
         "iat": iat,
-        "subject": f"urn:ramen-ai:receipt:{kid}:{receipt_id}",
+        "subject": subject,
         "cnf": {"jwk": jwk},
         "policy": {
-            "bundle_hash": payload_hash,
+            "bundle_hash": prefixed_hash,
             "enforcement_mode": "enforce",
             "version": payload["schema_version"],
         },
@@ -110,7 +118,7 @@ def build_trace_record(
         },
         "tool_transcript": {
             "call_count": 1,
-            "hash": payload_hash,
+            "hash": prefixed_hash,
             "transcript_uri": f"urn:ramen-ai:evaluation:{receipt_id}",
         },
         "appraisal": appraisal,

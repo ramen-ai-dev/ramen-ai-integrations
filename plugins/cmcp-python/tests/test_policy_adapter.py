@@ -157,7 +157,8 @@ def _make_adapter(**kwargs) -> RamenCmcpAdapter:
 # ---------------------------------------------------------------------------
 
 class TestAdapterConstructor:
-    def test_requires_api_key(self):
+    def test_requires_api_key(self, monkeypatch):
+        monkeypatch.delenv("RAMEN_API_KEY", raising=False)
         with pytest.raises(ValueError, match="api_key"):
             RamenCmcpAdapter(api_key="", bundle_ids=["ramen__shield_core_it"])
 
