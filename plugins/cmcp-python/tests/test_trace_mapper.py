@@ -1,7 +1,7 @@
 """Tests for ramen_cmcp.trace_mapper and ramen_cmcp._receipt_verify.
 
 Fixtures are the mathematically-verified V5 test vectors from
-alane-v5-conformance.md §5. The ephemeral public key (ramen_pk_ephemeral_test)
+v5-conformance.md §5. The ephemeral public key (ramen_pk_ephemeral_test)
 is embedded in _receipt_verify._AUDIT_PUBLIC_KEYS, so no network access or
 real credentials are needed to run these tests.
 """

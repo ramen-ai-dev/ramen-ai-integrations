@@ -4,6 +4,11 @@
   <img src="https://raw.githubusercontent.com/ramen-ai-dev/ramen-ai-integrations/master/assets/ramen-logo.png" alt="ramen-ai" width="100"/>
 </p>
 
+<p align="center">
+  <a href="https://github.com/agentrust-io/cmcp"><img src="https://raw.githubusercontent.com/agentrust-io/cmcp/main/docs/assets/icon.svg" alt="cMCP" height="28"/></a>&nbsp;&nbsp;
+  <strong>Compatible with <a href="https://github.com/agentrust-io/cmcp">cMCP</a> + <a href="https://github.com/agentrust-io/trace-spec">TRACE</a></strong>
+</p>
+
 A universal MCP stdio proxy that intercepts **tools/call** JSON-RPC messages
 at the transport layer, evaluates them against the
 [ramen-ai L2 Semantic Firewall](https://ramenai.dev), and blocks malicious

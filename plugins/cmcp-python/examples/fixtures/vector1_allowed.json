@@ -1,5 +1,5 @@
 {
-  "_comment": "Vector 1 — Allowed (verdict 1). Source: alane-v5-conformance.md §5.1. Signed by ramen_pk_ephemeral_test.",
+  "_comment": "Vector 1 — Allowed (verdict 1). Source: v5-conformance.md §5.1. Signed by ramen_pk_ephemeral_test.",
   "input": "What are the standard terms for a cash ISA?",
   "receipt": {
     "id": "11111111-1111-4111-8111-111111111111",

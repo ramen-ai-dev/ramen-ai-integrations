@@ -5,6 +5,9 @@
 # --- Reference directory (local context only, never committed) ---
 _ref/
 
+# --- Internal runbooks (local only, never committed) ---
+docs/integration-checklist.md
+
 # --- Node.js ---
 node_modules/
 npm-debug.log*

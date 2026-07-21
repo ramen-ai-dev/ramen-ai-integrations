@@ -1,5 +1,7 @@
 # ramen-cmcp-adapter
 
+[![cMCP](https://raw.githubusercontent.com/agentrust-io/cmcp/main/docs/assets/icon.svg)](https://github.com/agentrust-io/cmcp)&nbsp;&nbsp;**Integrates with [cMCP](https://github.com/agentrust-io/cmcp) + [TRACE](https://github.com/agentrust-io/trace-spec)**
+
 cMCP policy adapter and TRACE Trust Record exporter for the ramen-ai evaluation API.
 
 Intercepts tool calls at the cMCP boundary, evaluates them via
@@ -36,7 +38,7 @@ receipt onto a TRACE Trust Record ([EAT profile
   for the same limitation described in detail.
 - V5 receipts prove input binding, verdict, and policy UUIDs at the time of
   evaluation. Policy *rule content* is mutable under the same UUID; see
-  `alane-v5-conformance.md §6` for the full disclosure.
+  `v5-conformance.md §6` for the full disclosure.
 
 ## Requirements
 
@@ -159,7 +161,7 @@ pytest plugins/cmcp-python/tests -v
 
 No network access or real credentials are required. HTTP calls are intercepted
 by `pytest-httpx`. The conformance vectors use the ephemeral key from
-`alane-v5-conformance.md §3.2`, embedded in `_receipt_verify._AUDIT_PUBLIC_KEYS`.
+`v5-conformance.md §3.2`, embedded in `_receipt_verify._AUDIT_PUBLIC_KEYS`.
 
 ## Running the conformance workflow locally
 

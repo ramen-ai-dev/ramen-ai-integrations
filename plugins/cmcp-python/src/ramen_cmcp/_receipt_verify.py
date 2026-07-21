@@ -1,6 +1,6 @@
 """_receipt_verify — standalone V5 Ed25519 receipt verifier.
 
-Normative algorithm (alane-v5-conformance.md §4.3):
+Normative algorithm (v5-conformance.md §4.3):
 
     Step 1 — Signature
         publicKey  = AUDIT_PUBLIC_KEYS[receipt.kid]   # fail if kid unknown
@@ -38,7 +38,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from cryptography.hazmat.primitives import serialization
 
-# SPKI DER base64 — sourced from alane-v5-conformance.md §3
+# SPKI DER base64 — sourced from v5-conformance.md §3
 _AUDIT_PUBLIC_KEYS: dict[str, str] = {
     "ramen_pk_v1": "MCowBQYDK2VwAyEA8iTL9lJGYn2alGn1yMWVAIqLImTpADb9CqaLhisTuto=",
     "ramen_pk_ephemeral_test": "MCowBQYDK2VwAyEACmDytPXlfjKUMgV5l4w31xHt/G5p30UsNm/AmOI9OaM=",
@@ -53,7 +53,7 @@ def verify_v5_receipt(
 ) -> tuple[bool, str | None]:
     """Verify a ramen-ai V5 receipt.
 
-    Performs both verification steps from alane-v5-conformance.md §4.3:
+    Performs both verification steps from v5-conformance.md §4.3:
     Ed25519 signature over ``canonical_payload``, and SHA-256 input binding.
 
     Args:

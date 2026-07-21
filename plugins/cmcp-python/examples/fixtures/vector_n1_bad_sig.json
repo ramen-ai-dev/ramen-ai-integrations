@@ -1,5 +1,5 @@
 {
-  "_comment": "Negative Vector N1 — tampered signature. Source: alane-v5-conformance.md §5.4. Must verify as valid=false.",
+  "_comment": "Negative Vector N1 — tampered signature. Source: v5-conformance.md §5.4. Must verify as valid=false.",
   "input": "What are the standard terms for a cash ISA?",
   "receipt": {
     "id": "11111111-1111-4111-8111-111111111111",

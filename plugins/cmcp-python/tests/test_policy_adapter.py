@@ -2,7 +2,7 @@
 
 All HTTP calls are intercepted by pytest-httpx so no network or real API key
 is required.  The response fixtures mirror the V5 production envelope shape
-from alane-v5-conformance.md §2.
+from v5-conformance.md §2.
 """
 from __future__ import annotations
 

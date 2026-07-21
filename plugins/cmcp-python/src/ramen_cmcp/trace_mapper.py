@@ -3,7 +3,7 @@
 TRACE EAT profile: tag:agentrust.io,2026:trace-v0.1
 Spec: https://github.com/agentrust-io/trace-spec
 
-V5 receipt schema (normative source): alane-v5-conformance.md §4.2
+V5 receipt schema (normative source): v5-conformance.md §4.2
 TRACE Trust Record shape: derived from agentrust-io/integrations spendguard reference.
 
 Field mapping

@@ -4,6 +4,11 @@
   <img src="../../assets/ramen-logo.png" alt="ramen-ai" width="100"/>
 </p>
 
+<p align="center">
+  <a href="https://github.com/agentrust-io/cmcp"><img src="https://raw.githubusercontent.com/agentrust-io/cmcp/main/docs/assets/icon.svg" alt="cMCP" height="28"/></a>&nbsp;&nbsp;
+  <strong>Compatible with <a href="https://github.com/agentrust-io/cmcp">cMCP</a> + <a href="https://github.com/agentrust-io/trace-spec">TRACE</a></strong>
+</p>
+
 **An L2 Semantic Firewall integration for the Microsoft Agent Governance Toolkit (AGT).**
 
 This package lets the ramen-ai semantic firewall govern any agent running under
