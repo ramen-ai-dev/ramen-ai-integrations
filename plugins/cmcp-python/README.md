@@ -1,7 +1,5 @@
 # ramen-cmcp-adapter
 
-[![cMCP](https://raw.githubusercontent.com/agentrust-io/cmcp/main/docs/assets/icon.svg)](https://github.com/agentrust-io/cmcp)&nbsp;&nbsp;**Integrates with [cMCP](https://github.com/agentrust-io/cmcp) + [TRACE](https://github.com/agentrust-io/trace-spec)**
-
 cMCP policy adapter and TRACE Trust Record exporter for the ramen-ai evaluation API.
 
 Intercepts tool calls at the cMCP boundary, evaluates them via

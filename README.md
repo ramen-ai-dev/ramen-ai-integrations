@@ -4,11 +4,6 @@
   <img src="assets/ramen-logo.png" alt="ramen-ai" width="120"/>
 </p>
 
-<p align="center">
-  <a href="https://github.com/agentrust-io/cmcp"><img src="https://raw.githubusercontent.com/agentrust-io/cmcp/main/docs/assets/icon.svg" alt="cMCP" height="28"/></a>&nbsp;&nbsp;
-  <strong>Integrates with <a href="https://github.com/agentrust-io/cmcp">cMCP</a> + <a href="https://github.com/agentrust-io/trace-spec">TRACE</a></strong>
-</p>
-
 <p align="center"><strong>The deterministic execution boundary for AI agents.</strong></p>
 
 ---
@@ -47,6 +42,10 @@ steering instruction that is auditable, reproducible, and legally defensible.
   &nbsp;
   <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/github-action">
     <img src="https://img.shields.io/badge/GitHub%20Actions-2088FF?style=flat&logo=githubactions&logoColor=white" alt="GitHub Actions"/>
+  </a>
+  &nbsp;
+  <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/cmcp-python">
+    <img src="https://img.shields.io/badge/cMCP-00A67E?style=flat&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMiAyTDIgN2wxMCA1IDEwLTV6TTIgMTdsOCA0VjExbC04LTR6TTE0IDIxbDgtNFYxMWwtOCA0eiIvPjwvc3ZnPg==&logoColor=white" alt="cMCP"/>
   </a>
 </p>
 

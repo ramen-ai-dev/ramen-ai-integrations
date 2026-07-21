@@ -4,10 +4,6 @@
   <img src="../../assets/ramen-logo.png" alt="ramen-ai" width="100"/>
 </p>
 
-<p align="center">
-  <a href="https://github.com/agentrust-io/cmcp"><img src="https://raw.githubusercontent.com/agentrust-io/cmcp/main/docs/assets/icon.svg" alt="cMCP" height="28"/></a>&nbsp;&nbsp;
-  <strong>Compatible with <a href="https://github.com/agentrust-io/cmcp">cMCP</a> + <a href="https://github.com/agentrust-io/trace-spec">TRACE</a></strong>
-</p>
 
 Agnostic Node.js HTTP client and V5 Ed25519 receipt verifier for the
 [ramen-ai](https://ramenai.dev) PaaS evaluation API. The shared SDK used by
