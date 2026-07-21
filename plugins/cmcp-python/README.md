@@ -2,8 +2,8 @@
 
 cMCP policy adapter and TRACE Trust Record exporter for the ramen-ai evaluation API.
 
-Intercepts tool calls at the [cMCP](https://github.com/agentrust-io/cmcp) boundary, evaluates them via
-[ramen-ai](https://ramenai.dev), and maps the resulting V5 Ed25519-signed
+Intercepts tool calls at the [cMCP](https://github.com/agentrust-io/cmcp) boundary, evaluates their semantic intent against configured compliance policies via the
+[ramen-ai](https://ramenai.dev) API, and maps the resulting V5 Ed25519-signed
 receipt onto a TRACE Trust Record ([EAT profile
 `tag:agentrust.io,2026:trace-v0.1`](https://github.com/agentrust-io/trace-spec)).
 
