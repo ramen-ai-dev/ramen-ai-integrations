@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ramen-cmcp-adapter"
+version = "0.1.0"
+description = "cMCP policy adapter and TRACE Trust Record exporter for the ramen-ai evaluation API"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "ramen-ai-core>=0.2.0",
+    "cryptography>=42.0.0",
+]
+
+[project.optional-dependencies]
+# agentrust-io published packages — install to run the conformance workflow
+agentrust = [
+    "agentrust-trace>=0.3.0",
+    "agentrust-trace-tests>=0.1.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-httpx>=0.30.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ramen_cmcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

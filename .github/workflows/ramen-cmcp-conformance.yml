@@ -1,0 +1,85 @@
+name: ramen-cmcp-adapter conformance
+
+on:
+  push:
+    paths:
+      - "plugins/cmcp-python/**"
+      - "core-clients/python/**"
+  pull_request:
+    paths:
+      - "plugins/cmcp-python/**"
+      - "core-clients/python/**"
+  schedule:
+    - cron: "0 6 * * 1"  # weekly — catch drift against latest released packages
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: pytest (py${{ matrix.python }})
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install ramen-ai-core (editable)
+        run: pip install -e core-clients/python
+
+      - name: Install ramen-cmcp-adapter with dev + agentrust extras
+        run: pip install -e "plugins/cmcp-python[agentrust,dev]"
+
+      - name: Run unit tests (no network, no credentials)
+        run: pytest plugins/cmcp-python/tests -v
+
+  conformance:
+    name: TRACE conformance level 0 (py${{ matrix.python }})
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install released agentrust-io packages
+        run: |
+          pip install \
+            agentrust-trace \
+            agentrust-trace-tests \
+            cmcp-runtime
+
+      - name: Install ramen-ai-core (editable) and adapter
+        run: |
+          pip install -e core-clients/python
+          pip install -e "plugins/cmcp-python[agentrust]"
+
+      - name: Emit a TRACE Trust Record from the V1 fixture receipt
+        run: >
+          python plugins/cmcp-python/examples/emit_record.py
+          --out /tmp/ramen-trust-record.jwt
+
+      - name: TRACE conformance level 0
+        run: trace-tests verify --record /tmp/ramen-trust-record.jwt --level 0
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: trust-record-${{ matrix.os }}-py${{ matrix.python }}
+          path: /tmp/ramen-trust-record.jwt*
