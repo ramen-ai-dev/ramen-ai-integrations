@@ -1,0 +1,209 @@
+# ramen-ai MLflow Integration
+
+<p align="center">
+  <img src="../../assets/ramen-logo.png" alt="ramen-ai" width="100"/>
+</p>
+
+Algorithmic governance for classical ML models served via
+[MLflow](https://mlflow.org/), Databricks, or MLflow Model Serving.
+
+`RamenGovernedModel` is an `mlflow.pyfunc.PythonModel` that wraps an existing
+model and interposes a ramen-ai compliance evaluation between the inference
+request and the model's prediction. Feature values — and SHAP attributions where
+available — are serialised and evaluated for proxy bias and regulatory
+compliance. A `[BLOCKED]` verdict raises `GovernanceDeniedException` and the
+wrapped model is **never invoked**.
+
+Requires **Python ≥ 3.10** and **MLflow ≥ 2.9**.
+
+---
+
+## Why wrap the model rather than filter the input
+
+A feature array is not text, so a keyword filter cannot evaluate it. Whether
+`postcode` combined with `income` acts as an unlawful proxy for a protected
+attribute is a semantic question about the *combination* of features, not any
+single value. Evaluating it at the pyfunc boundary means the check runs inside
+the serving process — the same place the prediction happens — so it cannot be
+bypassed by calling the model directly.
+
+---
+
+## Installation
+
+```bash
+pip install -e plugins/mlflow-python          # from the monorepo
+pip install -e "plugins/mlflow-python[dev]"   # with test dependencies
+```
+
+---
+
+## Configuration
+
+```bash
+export RAMEN_API_KEY=ramen_ak_...   # required in the serving environment
+export OPENAI_API_KEY=sk-...        # required on Starter/Professional (BYOK)
+```
+
+**The API key is never serialised into the model artifact.** It is read from the
+environment at call time. Pickling a credential into a model registered in a
+shared registry would expose it to everyone with read access — so the wrapper
+reads it at predict time instead. There is a test asserting the key does not
+appear in the instance state.
+
+---
+
+## Wrapping a scikit-learn model
+
+```python
+import mlflow
+import pandas as pd
+from sklearn.ensemble import GradientBoostingClassifier
+from ramen_mlflow import RamenGovernedModel
+
+# 1. Train as normal
+clf = GradientBoostingClassifier().fit(X_train, y_train)
+
+# 2. Wrap it
+governed = RamenGovernedModel(
+    bundle_ids=["ramen__eu_ai_act_baseline"],
+    inner_model=clf,
+    model_name="credit-risk-scorer-v3",   # recorded in the audit log
+    feature_names=["income", "age", "employment_years"],  # optional subset
+)
+
+# 3. Log the governed model to the registry
+with mlflow.start_run():
+    info = mlflow.pyfunc.log_model(
+        name="credit-risk-governed",
+        python_model=governed,
+        input_example=X_train.head(),
+    )
+
+# 4. Serve it — governance travels with the model
+loaded = mlflow.pyfunc.load_model(info.model_uri)
+predictions = loaded.predict(X_test)   # raises on a BLOCKED verdict
+```
+
+Register the logged model and every deployment of that version carries the
+governance boundary with it. There is no separate gateway to configure and no
+way to call the model without passing the check.
+
+---
+
+## Handling a block
+
+```python
+from ramen_mlflow import GovernanceDeniedException
+
+try:
+    predictions = loaded.predict(X_test)
+except GovernanceDeniedException as exc:
+    print(exc.steering)             # "Remove the postcode feature and re-train..."
+    print(exc.statutory_anchors)    # ["EU AI Act Art. 10", "GDPR Art. 22"]
+    print(exc.receipt_verified)     # True — Ed25519 receipt verified locally
+    print(exc.policy_ids)           # resolved policy UUIDs
+    print(exc.receipt)              # raw V5 receipt for the audit trail
+```
+
+Under MLflow Model Serving the exception surfaces as a 500 with the message.
+That is intentional: a governance block is a hard stop, not a recoverable
+prediction failure.
+
+---
+
+## Passing SHAP values
+
+Supplying attributions lets the evaluator reason about *which* features drove the
+decision, not just their values:
+
+```python
+import shap
+
+explainer = shap.TreeExplainer(clf)
+shap_values = explainer.shap_values(X_test)
+
+loaded.predict(X_test, params={"shap_values": shap_values.tolist()})
+```
+
+A `shap_values` column on the input DataFrame is picked up automatically.
+
+---
+
+## Loading the wrapped model from artifacts
+
+For deployments where the inner model is logged separately, omit `inner_model`
+and provide it as an artifact under the key `inner_model`:
+
+```python
+mlflow.pyfunc.log_model(
+    name="governed",
+    python_model=RamenGovernedModel(bundle_ids=["ramen__eu_ai_act_baseline"]),
+    artifacts={"inner_model": "runs:/<run_id>/sklearn-model"},
+)
+```
+
+`load_context` resolves the artifact with `mlflow.pyfunc.load_model` on first use.
+
+---
+
+## API reference
+
+### `RamenGovernedModel(...)`
+
+| Parameter | Type | Description |
+|---|---|---|
+| `bundle_ids` | `list[str]` | Bundle slugs to evaluate against. One of `bundle_ids` / `policy_ids` required. |
+| `policy_ids` | `list[str]` | Explicit policy UUIDs. May be combined with bundles. |
+| `inner_model` | `Any` | Model to wrap; must expose `predict`. Omit to load from artifacts. |
+| `feature_names` | `list[str]` | Explicit ordering / subset of features to submit. Defaults to all columns. |
+| `provider_name` | `str` | BYOK routing hint (`openai` default, `anthropic`, `google`, `synthetic`, `hyperbolic`). |
+| `model_name` | `str` | Label recorded in the ramen-ai audit context. |
+| `base_url` | `str` | Override the API base URL. Default `https://api.ramenai.dev`. |
+| `timeout` | `float` | HTTP timeout in seconds. Default `30.0`. |
+| `fail_closed` | `bool` | Treat firewall errors as a BLOCK. Default `True`. |
+
+### Supported input types
+
+pandas DataFrame, numpy array, dict, or list of records. The input is handed to
+the wrapped model **unchanged** — the wrapper never rewrites the payload.
+
+---
+
+## Fail-closed behaviour
+
+Any error contacting the firewall (network failure, timeout, HTTP 4xx/5xx,
+malformed response) is treated as a BLOCK by default. A missing `RAMEN_API_KEY`
+also blocks. Set `fail_closed=False` only when the deployment explicitly accepts
+unevaluated inference during a firewall outage:
+
+```python
+RamenGovernedModel(..., fail_closed=False)   # logs a warning, allows inference
+```
+
+---
+
+## Running the tests
+
+```bash
+pip install -e "plugins/mlflow-python[dev]"
+pytest plugins/mlflow-python/tests -v
+```
+
+21 tests, no network access and no credentials required — HTTP calls are
+intercepted by `pytest-httpx`. Coverage includes: a blocked prediction halting
+the pipeline (asserting the wrapped model is never called), payload
+construction, SHAP forwarding, numpy input, all four fail-closed paths, and
+`load_context` resolution.
+
+---
+
+## Limitations
+
+- The evaluation adds one API round-trip per `predict` call. For high-throughput
+  batch scoring, evaluate a representative sample offline rather than wrapping
+  the serving path.
+- Inputs are truncated when the serialised payload exceeds the API's 50,000
+  character limit; a `_truncated` flag is set on the submitted payload.
+- The wrapper evaluates features and attributions. It does not inspect model
+  weights, training data, or the model's internal structure.
