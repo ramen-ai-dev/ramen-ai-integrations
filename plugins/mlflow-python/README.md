@@ -69,6 +69,15 @@ it pre-execution, issuing a verified Ed25519 receipt.
 
 ---
 
+## API Key
+
+To use this integration, you must mint an API Key. We offer a **Free Starter
+Tier** (1,000 evaluations/month, BYOK) which includes full access to our Core
+IT Security bundle. Mint your key at:
+**[https://ramenai.dev/pricing](https://ramenai.dev/pricing)**
+
+---
+
 ## Why wrap the model rather than filter the input
 
 A feature array is not text, so a keyword filter cannot evaluate it. Whether
@@ -101,6 +110,20 @@ environment at call time. Pickling a credential into a model registered in a
 shared registry would expose it to everyone with read access — so the wrapper
 reads it at predict time instead. There is a test asserting the key does not
 appear in the instance state.
+
+### BYOK (Bring Your Own Key)
+
+The Starter and Professional tiers require your own LLM provider key (OpenAI,
+Anthropic, etc.). `RamenGovernedModel` reads it from `OPENAI_API_KEY` and
+forwards it as the `X-Provider-Key` header on every evaluation request.
+Without it the API returns `402 Payment Required` on these tiers.
+
+Set `provider_name` on the constructor to route to a non-default provider
+(forwarded as `X-Provider`; accepted values: `"openai"` (default),
+`"anthropic"`, `"google"`, `"synthetic"`, `"hyperbolic"`).
+
+Enterprise tiers use platform-managed keys — the serving environment does not
+need `OPENAI_API_KEY` set at all.
 
 ---
 
