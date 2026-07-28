@@ -47,6 +47,10 @@ steering instruction that is auditable, reproducible, and legally defensible.
   <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/cmcp-python">
     <img src="https://img.shields.io/badge/cMCP-00A67E?style=flat&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMiAyTDIgN2wxMCA1IDEwLTV6TTIgMTdsOCA0VjExbC04LTR6TTE0IDIxbDgtNFYxMWwtOCA0eiIvPjwvc3ZnPg==&logoColor=white" alt="cMCP"/>
   </a>
+  &nbsp;
+  <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/mlflow-python">
+    <img src="https://img.shields.io/badge/MLflow-0194E2?style=flat&logo=mlflow&logoColor=white" alt="MLflow"/>
+  </a>
 </p>
 
 ---
@@ -120,6 +124,8 @@ queue, or gateway not covered by the plugins below.
 | `langchain-python` | LangChain (Python) | [`plugins/langchain-python/`](plugins/langchain-python/) | `BaseCallbackHandler` that intercepts LangChain tool calls pre-execution and halts the chain on `[BLOCKED]`. |
 | `pydantic-ai` | PydanticAI (Python) | [`plugins/pydantic-ai/`](plugins/pydantic-ai/) | `args_validator` factory that intercepts tool calls after schema validation and halts the agent run on `[BLOCKED]`. |
 | `mcp-proxy` | MCP stdio (universal) | [`plugins/mcp-proxy/`](plugins/mcp-proxy/) | Universal stdio proxy intercepting `tools/call` JSON-RPC at the transport layer. Works with Claude Desktop and any stdio MCP client. |
+| `cmcp-python` | cMCP + TRACE | [`plugins/cmcp-python/`](plugins/cmcp-python/) | cMCP tool-call policy adapter, plus a TRACE Trust Record exporter that maps V5 Ed25519 receipts onto the agentrust-io EAT profile. |
+| `mlflow-python` | MLflow / Databricks | [`plugins/mlflow-python/`](plugins/mlflow-python/) | `mlflow.pyfunc.PythonModel` wrapper enforcing algorithmic governance on classical ML. Evaluates feature arrays and SHAP attributions for proxy bias pre-inference; halts serving on `[BLOCKED]`. |
 
 ---
 
@@ -174,7 +180,9 @@ Full bundle and policy reference: [https://ramenai.dev/pricing](https://ramenai.
 │   ├── github-action/       # GitHub Actions CI/CD interceptor
 │   ├── langchain-python/    # LangChain Python callback handler
 │   ├── pydantic-ai/         # PydanticAI args_validator middleware
-│   └── mcp-proxy/           # Universal MCP stdio transport interceptor
+│   ├── mcp-proxy/           # Universal MCP stdio transport interceptor
+│   ├── cmcp-python/         # cMCP policy adapter + TRACE record exporter
+│   └── mlflow-python/       # MLflow pyfunc algorithmic governance wrapper
 ├── .github/
 │   └── workflows/           # CI workflows
 └── RED_TEAM_GUIDE.md        # Zero-day evasion vectors and challenge guide

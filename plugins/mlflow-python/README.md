@@ -18,6 +18,57 @@ Requires **Python ≥ 3.10** and **MLflow ≥ 2.9**.
 
 ---
 
+<p align="center">
+  <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/langchain-python">
+    <img src="https://img.shields.io/badge/LangChain-1C3C3C?style=flat&logo=langchain&logoColor=white" alt="LangChain"/>
+  </a>
+  &nbsp;
+  <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/pydantic-ai">
+    <img src="https://img.shields.io/badge/PydanticAI-E92063?style=flat&logo=pydantic&logoColor=white" alt="PydanticAI"/>
+  </a>
+  &nbsp;
+  <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/mcp-proxy">
+    <img src="https://img.shields.io/badge/MCP-6B21A8?style=flat&logo=anthropic&logoColor=white" alt="MCP"/>
+  </a>
+  &nbsp;
+  <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/agt-typescript">
+    <img src="https://img.shields.io/badge/Microsoft%20AGT-0078D4?style=flat&logo=microsoft&logoColor=white" alt="Microsoft AGT"/>
+  </a>
+  &nbsp;
+  <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/github-action">
+    <img src="https://img.shields.io/badge/GitHub%20Actions-2088FF?style=flat&logo=githubactions&logoColor=white" alt="GitHub Actions"/>
+  </a>
+  &nbsp;
+  <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/cmcp-python">
+    <img src="https://img.shields.io/badge/cMCP-00A67E?style=flat&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMiAyTDIgN2wxMCA1IDEwLTV6TTIgMTdsOCA0VjExbC04LTR6TTE0IDIxbDgtNFYxMWwtOCA0eiIvPjwvc3ZnPg==&logoColor=white" alt="cMCP"/>
+  </a>
+  &nbsp;
+  <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/mlflow-python">
+    <img src="https://img.shields.io/badge/MLflow-0194E2?style=flat&logo=mlflow&logoColor=white" alt="MLflow"/>
+  </a>
+</p>
+
+---
+
+## Can you bypass it?
+
+Standard safety filters catch basic syntax. They fail against encoded payloads
+and corporate jargon. We challenge you to bypass our semantic firewall using
+the zero-day evasion vectors in our official **[Red Team Guide](../../RED_TEAM_GUIDE.md)**.
+
+Below is a simulation of the Grok/Bankr heist. We fed the raw adversarial
+prompt directly into our sandbox. It uses a social engineering wrapper
+(claiming a visual impairment) to smuggle a 3,000,000,000 DRB transfer
+instruction encoded in Morse code. The firewall evaluated the underlying
+semantic intent, intercepted the unauthorized financial transfer, and blocked
+it pre-execution, issuing a verified Ed25519 receipt.
+
+<p align="center">
+  <img src="../../assets/grok-bankr.png" alt="ramen-ai intercepting the Grok/Bankr Morse-code heist pre-execution" width="720"/>
+</p>
+
+---
+
 ## Why wrap the model rather than filter the input
 
 A feature array is not text, so a keyword filter cannot evaluate it. Whether
