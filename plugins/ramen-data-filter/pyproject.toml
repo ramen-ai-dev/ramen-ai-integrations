@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ramen-data-filter"
+version = "0.1.0"
+description = "ramen-ai dual-mode Pandas and CSV filtration for RAG ingestion and MLOps dataset sanitization."
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+dependencies = [
+    "pandas==2.3.3",
+    "ramen-ai-core==0.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.4.2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ramen_data_filter"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

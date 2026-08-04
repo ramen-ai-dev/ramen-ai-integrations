@@ -1,0 +1,40 @@
+name: ramen-data-filter conformance
+
+on:
+  push:
+    paths:
+      - "plugins/ramen-data-filter/**"
+      - "core-clients/python/**"
+  pull_request:
+    paths:
+      - "plugins/ramen-data-filter/**"
+      - "core-clients/python/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: pytest (py${{ matrix.python }})
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install ramen-ai-core (editable)
+        run: pip install -e core-clients/python
+
+      - name: Install ramen-data-filter with test dependencies
+        run: pip install -e "plugins/ramen-data-filter[dev]"
+
+      - name: Run isolated unit tests
+        run: pytest plugins/ramen-data-filter/tests -v
