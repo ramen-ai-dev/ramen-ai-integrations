@@ -4,8 +4,9 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ramen-ai-core"
-version = "0.2.0"
-description = "Agnostic Python HTTP client and Ed25519 V5 cryptographic verifier for the ramen-ai cloud API"
+version = "0.2.1"
+description = "Synchronous Python client for the ramen-ai API with local Ed25519 V5 receipt verification."
+readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = [

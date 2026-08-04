@@ -5,12 +5,13 @@ build-backend = "hatchling.build"
 [project]
 name = "ramen-data-filter"
 version = "0.1.0"
-description = "ramen-ai dual-mode Pandas and CSV filtration for RAG ingestion and MLOps dataset sanitization."
+description = "Dual-mode Pandas and CSV filtration for ramen-ai RAG ingestion and MLOps dataset sanitization."
+readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Proprietary" }
 dependencies = [
     "pandas==2.3.3",
-    "ramen-ai-core==0.2.0",
+    "ramen-ai-core==0.2.1",
 ]
 
 [project.optional-dependencies]
