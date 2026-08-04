@@ -4,16 +4,15 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
+from copy import deepcopy
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 import pandas as pd
-from pandas.api.types import is_integer_dtype, is_numeric_dtype
 from ramen_ai import RamenClient
 
 
@@ -62,6 +61,7 @@ def filter_dataframe(
     bundle_ids: Sequence[str] | None = None,
     policy_ids: Sequence[str] | None = None,
     remediable_columns: Sequence[str] | None = None,
+    healing_callback: Callable[[dict[str, Any], str], dict[str, Any]] | None = None,
     client: RamenClient | None = None,
     api_key: str | None = None,
     provider_key: str | None = None,
@@ -73,13 +73,13 @@ def filter_dataframe(
     """Evaluate and filter a DataFrame row by row.
 
     Strict exclusion retains only rows with an allowed verdict. Semantic
-    imputation keeps every row but changes only allowlisted columns named in a
-    blocked row's steering instruction. Numeric replacements use the allowed
-    reference mean (rounded for integer columns); other values use deterministic
-    hot-deck imputation from allowed rows.
+    imputation calls ``healing_callback`` for each blocked JSON row and keeps
+    the callback's cured row. Without a callback, semantic mode safely falls
+    back to strict exclusion. ``remediable_columns`` optionally constrains
+    which values the callback may change.
 
-    API and transport failures stop processing. Partial output is never
-    returned or written.
+    API, transport, and callback failures stop processing. Partial output is
+    never returned or written.
     """
     if not isinstance(dataframe, pd.DataFrame):
         raise TypeError("dataframe must be a pandas DataFrame")
@@ -97,10 +97,14 @@ def filter_dataframe(
         raise ValueError("Provide at least one of 'bundle_ids' or 'policy_ids'.")
 
     allowed_columns = _validated_columns(dataframe, remediable_columns)
-    if selected_mode is FiltrationMode.SEMANTIC_IMPUTATION and not allowed_columns:
-        raise ValueError(
-            "semantic_imputation requires at least one remediable column"
-        )
+    if healing_callback is not None and not callable(healing_callback):
+        raise TypeError("healing_callback must be callable or None")
+    if (
+        selected_mode is FiltrationMode.SEMANTIC_IMPUTATION
+        and healing_callback is not None
+        and not all(isinstance(column, str) for column in dataframe.columns)
+    ):
+        raise ValueError("semantic healing requires string dataframe columns")
 
     evaluation_context = dict(context or {})
     if not all(
@@ -132,6 +136,7 @@ def filter_dataframe(
             serialized_row = json.dumps(
                 row.to_dict(), sort_keys=True, default=str
             )
+            input_row = json.loads(serialized_row)
             try:
                 response = active_client.evaluate_compliance(
                     input_text=serialized_row,
@@ -190,6 +195,7 @@ def filter_dataframe(
                     "receipt_verified": receipt_verified,
                     "policy_ids": resolved_policy_ids.copy(),
                     "response": dict(response),
+                    "input_row": input_row,
                 }
             )
     finally:
@@ -201,7 +207,10 @@ def filter_dataframe(
         record["row_position"] for record in records if record["allowed"]
     ]
 
-    if selected_mode is FiltrationMode.STRICT_EXCLUSION:
+    if (
+        selected_mode is FiltrationMode.STRICT_EXCLUSION
+        or healing_callback is None
+    ):
         filtered = dataframe.iloc[allowed_positions].copy().reset_index(drop=True)
         return FiltrationResult(
             dataframe=filtered,
@@ -209,14 +218,14 @@ def filter_dataframe(
             imputation_log=pd.DataFrame(columns=_IMPUTATION_COLUMNS),
         )
 
-    imputed, imputation_log = _impute_blocked_rows(
+    healed, imputation_log = _heal_blocked_rows(
         dataframe=dataframe,
         records=records,
-        allowed_positions=allowed_positions,
         remediable_columns=allowed_columns,
+        healing_callback=healing_callback,
     )
     return FiltrationResult(
-        dataframe=imputed,
+        dataframe=healed,
         audit_log=audit_log,
         imputation_log=imputation_log,
     )
@@ -285,78 +294,102 @@ def _validated_columns(
     return normalized
 
 
-def _impute_blocked_rows(
+def _heal_blocked_rows(
     *,
     dataframe: pd.DataFrame,
     records: list[dict[str, Any]],
-    allowed_positions: list[int],
     remediable_columns: list[str],
+    healing_callback: Callable[[dict[str, Any], str], dict[str, Any]],
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    blocked_records = [record for record in records if not record["allowed"]]
-    if not blocked_records:
-        return dataframe.copy(), pd.DataFrame(columns=_IMPUTATION_COLUMNS)
-    if not allowed_positions:
-        raise FiltrationError(
-            "semantic imputation requires at least one allowed reference row"
-        )
-
-    reference = dataframe.iloc[allowed_positions]
-    replacements = {
-        column: _replacement_values(reference[column], column)
-        for column in remediable_columns
-    }
-    imputed = dataframe.copy()
+    healed = dataframe.copy()
     log_records: list[dict[str, Any]] = []
 
-    for blocked_ordinal, record in enumerate(blocked_records):
+    for record in records:
+        if record["allowed"]:
+            continue
+
+        position = record["row_position"]
+        original_row = deepcopy(record["input_row"])
         steering = record["steering"] or ""
-        selected_columns = [
-            column
-            for column in remediable_columns
-            if re.search(
-                rf"(?<![\w]){re.escape(column)}(?![\w])",
-                steering,
-                flags=re.IGNORECASE,
-            )
-        ]
-        if not selected_columns:
+        try:
+            cured_row = healing_callback(deepcopy(original_row), steering)
+        except Exception as exc:
             raise FiltrationError(
-                "blocked row did not receive steering naming an allowlisted "
-                f"column at row position {record['row_position']}"
+                f"healing callback failed for row position {position}"
+            ) from exc
+
+        if not isinstance(cured_row, dict):
+            raise FiltrationError(
+                "healing callback must return a dict "
+                f"for row position {position}"
+            )
+        try:
+            cured_row = json.loads(
+                json.dumps(cured_row, sort_keys=True, allow_nan=False)
+            )
+        except (TypeError, ValueError) as exc:
+            raise FiltrationError(
+                "healing callback must return a JSON-compatible row "
+                f"for row position {position}"
+            ) from exc
+        if set(cured_row) != set(original_row):
+            raise FiltrationError(
+                "healing callback must preserve the row schema "
+                f"for row position {position}"
             )
 
-        for column in selected_columns:
-            values = replacements[column]
-            replacement = values[blocked_ordinal % len(values)]
+        changed_columns = tuple(
+            column
+            for column in dataframe.columns
+            if not _json_values_equal(original_row[column], cured_row[column])
+        )
+        if not changed_columns:
+            raise FiltrationError(
+                f"healing callback did not change blocked row position {position}"
+            )
+
+        disallowed = [
+            column
+            for column in changed_columns
+            if remediable_columns and column not in remediable_columns
+        ]
+        if disallowed:
+            raise FiltrationError(
+                "healing callback changed columns outside remediable_columns "
+                f"at row position {position}: {disallowed}"
+            )
+
+        for column in changed_columns:
             column_position = dataframe.columns.get_loc(column)
-            imputed.iat[record["row_position"], column_position] = replacement
+            healed.iat[position, column_position] = cured_row[column]
+            stored_value = healed.iat[position, column_position]
+            if not _json_values_equal(stored_value, cured_row[column]):
+                raise FiltrationError(
+                    "dataframe could not preserve healed value for column "
+                    f"'{column}' at row position {position}"
+                )
 
         log_records.append(
             {
-                "row_position": record["row_position"],
+                "row_position": position,
                 "row_index": record["row_index"],
-                "columns_changed": tuple(selected_columns),
+                "columns_changed": changed_columns,
                 "steering": steering,
             }
         )
 
-    return imputed, pd.DataFrame(log_records, columns=_IMPUTATION_COLUMNS)
+    return healed, pd.DataFrame(log_records, columns=_IMPUTATION_COLUMNS)
 
 
-def _replacement_values(series: pd.Series, column: str) -> list[Any]:
-    non_null = series.dropna()
-    if non_null.empty:
-        raise FiltrationError(
-            f"allowed reference rows contain no values for '{column}'"
-        )
-    if is_numeric_dtype(non_null.dtype):
-        mean = non_null.mean()
-        if pd.isna(mean):
-            raise FiltrationError(
-                f"allowed reference mean could not be calculated for '{column}'"
-            )
-        replacement: Any = float(mean)
-        if is_integer_dtype(non_null.dtype):
-            replacement = int(round(replacement))
-        return [replacement]
-    return non_null.tolist()
+def _json_values_equal(left: Any, right: Any) -> bool:
+    return _json_comparison_value(left) == _json_comparison_value(right)
+
+
+def _json_comparison_value(value: Any) -> str:
+    item = getattr(value, "item", None)
+    if callable(item):
+        try:
+            value = item()
+        except (TypeError, ValueError):
+            pass
+    return json.dumps(value, sort_keys=True, default=str)

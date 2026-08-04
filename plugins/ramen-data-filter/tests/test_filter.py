@@ -73,20 +73,30 @@ def test_strict_exclusion_removes_blocked_rows() -> None:
     assert client.evaluate_compliance.call_count == 3
 
 
-def test_semantic_imputation_repairs_only_allowlisted_columns() -> None:
+def test_semantic_imputation_uses_callback_for_blocked_row() -> None:
     client = _mock_client()
     source = _dataset()
 
+    def heal(row: dict, steering: str) -> dict:
+        assert steering == "Replace email and risk_score before ingestion."
+        return {
+            **row,
+            "email": "redacted@example.invalid",
+            "risk_score": (10 + 30) // 2,
+        }
+
+    healing_callback = Mock(side_effect=heal)
     result = filter_dataframe(
         source,
         mode=FiltrationMode.SEMANTIC_IMPUTATION,
         policy_ids=["policy-1"],
         remediable_columns=["email", "risk_score"],
+        healing_callback=healing_callback,
         client=client,
     )
 
     assert len(result.dataframe) == len(source)
-    assert result.dataframe.loc[1, "email"] == "clean@example.com"
+    assert result.dataframe.loc[1, "email"] == "redacted@example.invalid"
     assert result.dataframe.loc[1, "risk_score"] == 20
     assert result.dataframe.loc[1, "record_id"] == "blocked"
     pd.testing.assert_series_equal(result.dataframe.loc[0], source.loc[0])
@@ -94,6 +104,14 @@ def test_semantic_imputation_repairs_only_allowlisted_columns() -> None:
     assert result.imputation_log.loc[0, "columns_changed"] == (
         "email",
         "risk_score",
+    )
+    healing_callback.assert_called_once_with(
+        {
+            "email": "export@attacker.test",
+            "record_id": "blocked",
+            "risk_score": 99,
+        },
+        "Replace email and risk_score before ingestion.",
     )
     assert client.evaluate_compliance.call_count == 3
 
@@ -115,34 +133,39 @@ def test_duplicate_columns_are_rejected_before_evaluation() -> None:
     client.evaluate_compliance.assert_not_called()
 
 
-def test_semantic_imputation_requires_exact_column_name_in_steering() -> None:
-    client = Mock(spec=RamenClient)
-    client.evaluate_compliance.side_effect = [
-        {
-            "allowed": True,
-            "steering": None,
-            "receipt_verified": True,
-            "policy_ids": ["policy-1"],
-        },
-        {
-            "allowed": False,
-            "steering": "Manage the record safely.",
-            "receipt_verified": True,
-            "policy_ids": ["policy-1"],
-        },
-    ]
-    source = pd.DataFrame(
-        [{"record_id": "safe", "age": 30}, {"record_id": "blocked", "age": 99}]
+def test_semantic_imputation_without_callback_falls_back_to_exclusion() -> None:
+    client = _mock_client()
+
+    result = filter_dataframe(
+        _dataset(),
+        mode=FiltrationMode.SEMANTIC_IMPUTATION,
+        policy_ids=["policy-1"],
+        client=client,
     )
 
-    with pytest.raises(FiltrationError, match="allowlisted column"):
+    assert result.dataframe["record_id"].tolist() == ["safe-1", "safe-2"]
+    assert result.imputation_log.empty
+
+
+def test_healing_callback_failure_is_wrapped_and_fails_closed() -> None:
+    client = _mock_client()
+
+    def fail_to_heal(row: dict, steering: str) -> dict:
+        raise RuntimeError("healing service unavailable")
+
+    with pytest.raises(
+        FiltrationError, match="healing callback failed for row position 1"
+    ) as error:
         filter_dataframe(
-            source,
+            _dataset(),
             mode=FiltrationMode.SEMANTIC_IMPUTATION,
             policy_ids=["policy-1"],
-            remediable_columns=["age"],
+            healing_callback=fail_to_heal,
             client=client,
         )
+
+    assert isinstance(error.value.__cause__, RuntimeError)
+    assert str(error.value.__cause__) == "healing service unavailable"
 
 
 def test_malformed_audit_metadata_is_rejected() -> None:
@@ -195,3 +218,55 @@ def test_csv_write_failure_preserves_existing_destination(
 
     assert destination_path.read_text(encoding="utf-8") == "existing-output\n"
     assert not list(tmp_path.glob(f".{destination_path.name}.*.tmp"))
+
+
+def test_healing_callback_can_mutate_nested_copy() -> None:
+    client = Mock(spec=RamenClient)
+    client.evaluate_compliance.return_value = {
+        "allowed": False,
+        "steering": "Redact metadata before ingestion.",
+        "receipt_verified": True,
+        "policy_ids": ["policy-1"],
+    }
+    source = pd.DataFrame(
+        [{"record_id": "blocked", "metadata": {"secret": "value"}}]
+    )
+
+    def heal(row: dict, steering: str) -> dict:
+        row["metadata"]["secret"] = "[REDACTED]"
+        return row
+
+    result = filter_dataframe(
+        source,
+        mode=FiltrationMode.SEMANTIC_IMPUTATION,
+        policy_ids=["policy-1"],
+        remediable_columns=["metadata"],
+        healing_callback=heal,
+        client=client,
+    )
+
+    assert result.dataframe.loc[0, "metadata"] == {"secret": "[REDACTED]"}
+    assert source.loc[0, "metadata"] == {"secret": "value"}
+    assert result.imputation_log.loc[0, "columns_changed"] == ("metadata",)
+
+
+def test_healing_callback_rejects_non_json_output() -> None:
+    client = Mock(spec=RamenClient)
+    client.evaluate_compliance.return_value = {
+        "allowed": False,
+        "steering": "Replace content before ingestion.",
+        "receipt_verified": True,
+        "policy_ids": ["policy-1"],
+    }
+
+    def heal(row: dict, steering: str) -> dict:
+        return {**row, "content": {"not-json"}}
+
+    with pytest.raises(FiltrationError, match="JSON-compatible row"):
+        filter_dataframe(
+            pd.DataFrame([{"content": "blocked"}]),
+            mode=FiltrationMode.SEMANTIC_IMPUTATION,
+            policy_ids=["policy-1"],
+            healing_callback=heal,
+            client=client,
+        )

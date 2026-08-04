@@ -9,10 +9,11 @@ dataset sanitization. Every row is evaluated through the ramen-ai semantic
 firewall before it can enter a retrieval corpus, training set, analytics store,
 or downstream data pipeline.
 
-Use **Strict Exclusion** to remove blocked rows, or **Semantic Imputation** to
-preserve row count while replacing only explicitly allowlisted columns named by
-ramen-ai steering. Typical policies can detect PII, data-exfiltration vectors,
-poisoned retrieval context, prompt injection, and other unsafe dataset content.
+Use **Strict Exclusion** to remove blocked rows, or provide an optional
+**Semantic Imputation (Healing)** callback to cure blocked rows under your own
+runtime and model choices. Without a callback, blocked rows are always dropped.
+Typical policies can detect PII, data-exfiltration vectors, poisoned retrieval
+context, prompt injection, and other unsafe dataset content.
 
 Requires **Python ≥ 3.10**.
 
@@ -153,25 +154,53 @@ clean_records = result.dataframe
 print(result.audit_log[["row_index", "verdict", "receipt_verified"]])
 ```
 
-### Semantic Imputation
+### Optional Semantic Imputation (Healing)
 
-Semantic imputation preserves every row. A blocked row may change only a column
-that is both listed in `remediable_columns` and named in the ramen-ai steering
-instruction. Numeric columns receive the allowed-reference mean (rounded for
-integer data); non-numeric columns use deterministic hot-deck values from
-allowed rows. All other values remain unchanged.
+Mode B is opt-in. Supply a callback with this contract:
 
 ```python
+Callable[[dict, str], dict]
+```
+
+The callback receives a copy of the blocked JSON row and the ramen-ai steering
+string, then returns the cured JSON row. `ramen-data-filter` does not install or
+require an LLM framework: the callback can use deterministic rules, an internal
+service, or a model chosen by the operator.
+
+The returned dictionary must preserve the original keys and change at least one
+value. When `remediable_columns` is supplied, changing any other column fails
+closed. Allowed rows remain byte-for-value unchanged.
+
+```python
+from ramen_data_filter import FiltrationMode, filter_dataframe
+
+
+def heal_record(row: dict, steering: str) -> dict:
+    cured = dict(row)
+    cured["content"] = "[REDACTED BY DATA POLICY]"
+    return cured
+
+
 result = filter_dataframe(
     records,
     mode=FiltrationMode.SEMANTIC_IMPUTATION,
     policy_ids=["<POLICY_UUID>"],
     remediable_columns=["content"],
+    healing_callback=heal_record,
 )
 
 sanitized_records = result.dataframe
 print(result.imputation_log)
 ```
+
+If `healing_callback` is omitted, semantic mode defaults to Strict Exclusion and
+drops every blocked row. If the callback raises, returns a non-dictionary,
+changes the schema, makes no change, or modifies a disallowed column, the
+operation raises `FiltrationError` and returns no partial result.
+
+For continuous training workloads, see the
+**[Just-In-Time Training Pipeline](https://github.com/ramen-ai-dev/ramen-ai-integrations/blob/master/plugins/ramen-data-filter/docs/JIT_TRAINING_PIPELINE.md)** guide for
+PyTorch `DataLoader` and TensorFlow `tf.data.Dataset` prefetch patterns.
 
 ### CSV pipeline
 
@@ -197,13 +226,15 @@ transformation succeeds. Existing destination files are replaced by Pandas.
 2. Calls `RamenClient.evaluate_compliance` with configured bundles or policies.
 3. Records the verdict, steering, resolved policy IDs, receipt verification
    state, and complete SDK response in `audit_log`.
-4. Applies the selected mode only after all rows have been evaluated.
-5. Returns a new DataFrame and transformation metadata; CSV usage writes that
-   DataFrame with `index=False`.
+4. In Strict Exclusion mode, drops blocked rows. In Semantic Imputation mode,
+   drops blocked rows when no callback is configured; otherwise passes each
+   blocked JSON row and steering string to the operator's healing callback.
+5. Validates callback output and returns a new DataFrame plus transformation
+   metadata; CSV usage writes that DataFrame atomically with `index=False`.
 
 The pipeline is fail-closed. Missing credentials, transport failures, malformed
-responses, unsafe imputation steering, and unusable reference values raise
-`FiltrationError`; partial filtered output is never returned or written.
+responses, and callback failures raise `FiltrationError`; partial filtered
+output is never returned or written.
 
 ---
 
@@ -217,7 +248,8 @@ responses, unsafe imputation steering, and unusable reference values raise
 | `mode` | `FiltrationMode \| str` | `strict_exclusion` or `semantic_imputation`. |
 | `bundle_ids` | `Sequence[str]` | ramen-ai bundle slugs. At least one bundle or policy is required. |
 | `policy_ids` | `Sequence[str]` | Explicit policy UUIDs. May be combined with bundles. |
-| `remediable_columns` | `Sequence[str]` | Columns eligible for steering-constrained replacement. Required for semantic imputation. |
+| `remediable_columns` | `Sequence[str]` | Optional guard limiting which columns the healing callback may change. |
+| `healing_callback` | `Callable[[dict, str], dict] \| None` | Optional blocked-row healer. Without it, blocked rows are strictly excluded. |
 | `client` | `RamenClient` | Optional injected client, primarily for controlled runtimes and tests. |
 | `api_key` | `str` | Runtime override; defaults to `RAMEN_API_KEY`. |
 | `provider_key` | `str` | BYOK override; defaults to `OPENAI_API_KEY`. |
@@ -252,8 +284,20 @@ PYTHONPATH="core-clients/python:plugins/ramen-data-filter/src" \
 ```
 
 The isolated tests use a mocked `RamenClient`; they make no network calls and
-require no credentials. They prove blocked-row exclusion and constrained
-semantic imputation on a dummy DataFrame.
+require no credentials. They prove blocked-row exclusion, deterministic callback
+healing, strict fallback without a callback, and fail-closed callback errors on
+a dummy DataFrame.
+
+---
+
+## Enterprise Custom Policies
+
+For Business and Enterprise tiers, our domain experts can compile bespoke, company-specific business logic matrices to filter proprietary datasets.
+
+Custom policies can encode internal data classifications, field-level handling
+rules, industry controls, contractual restrictions, and organization-specific
+recovery steering. Use explicit `policy_ids` to bind a filtration pipeline to
+those policies and preserve the resolved policy IDs in the audit log.
 
 ---
 
@@ -275,10 +319,10 @@ MLOps controls. Bundle and policy details are available at
 - Evaluation adds one API request per row. Large datasets should be processed in
   controlled batches with rate limits and resumability at the orchestration
   layer.
-- Semantic imputation creates synthetic values; it does not recover original
+- Semantic healing creates operator-supplied values; it does not recover original
   truth or establish legal compliance, statistical fairness, or model quality.
-- Imputed rows are not automatically re-evaluated. Validate and, where required,
+- Healed rows are not automatically re-evaluated. Validate and, where required,
   re-evaluate transformed output before production ingestion or training.
-- Non-numeric hot-deck replacement is deterministic and may alter dataset
-  distributions. Preserve source data and review `audit_log` and
-  `imputation_log` in an access-controlled audit store.
+- Callback quality, determinism, latency, and provider costs belong to the
+  operator. Preserve source data and review `audit_log` and `imputation_log` in
+  an access-controlled audit store.
