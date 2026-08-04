@@ -1,7 +1,7 @@
 # ramen-ai-core (Python)
 
 <p align="center">
-  <img src="../../assets/ramen-logo.png" alt="ramen-ai" width="100"/>
+  <img src="https://raw.githubusercontent.com/ramen-ai-dev/ramen-ai-integrations/master/assets/ramen-logo.png" alt="ramen-ai" width="100"/>
 </p>
 
 

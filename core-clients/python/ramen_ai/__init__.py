@@ -4,4 +4,4 @@ from .client import RamenClient
 from .verifier import verify_receipt
 
 __all__ = ["RamenClient", "verify_receipt"]
-__version__ = "0.2.1"
+__version__ = "0.2.2"

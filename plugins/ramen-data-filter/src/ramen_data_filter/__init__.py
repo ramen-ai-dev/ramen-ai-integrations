@@ -15,4 +15,4 @@ __all__ = [
     "filter_csv",
     "filter_dataframe",
 ]
-__version__ = "0.1.0"
+__version__ = "0.1.1"
