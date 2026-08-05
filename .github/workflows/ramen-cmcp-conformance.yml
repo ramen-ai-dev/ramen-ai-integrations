@@ -3,14 +3,16 @@ name: ramen-cmcp-adapter conformance
 on:
   push:
     paths:
+      - ".github/workflows/ramen-cmcp-conformance.yml"
       - "plugins/cmcp-python/**"
       - "core-clients/python/**"
   pull_request:
     paths:
+      - ".github/workflows/ramen-cmcp-conformance.yml"
       - "plugins/cmcp-python/**"
       - "core-clients/python/**"
   schedule:
-    - cron: "0 6 * * 1"  # weekly — catch drift against latest released packages
+    - cron: "0 6 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -36,14 +38,14 @@ jobs:
       - name: Install ramen-ai-core (editable)
         run: pip install -e core-clients/python
 
-      - name: Install ramen-cmcp-adapter with dev + agentrust extras
-        run: pip install -e "plugins/cmcp-python[agentrust,dev]"
+      - name: Install ramen-cmcp-adapter with dev dependencies
+        run: pip install -e "plugins/cmcp-python[dev]"
 
-      - name: Run unit tests (no network, no credentials)
+      - name: Run unit and conformance tests (no network, no credentials)
         run: pytest plugins/cmcp-python/tests -v
 
   conformance:
-    name: TRACE conformance level 0 (py${{ matrix.python }})
+    name: TRACE v0.2 conformance level 0 (py${{ matrix.python }})
     needs: test
     strategy:
       fail-fast: false
@@ -59,28 +61,30 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
 
-      - name: Install released agentrust-io packages
-        run: |
-          pip install \
-            agentrust-trace \
-            agentrust-trace-tests \
-            cmcp-runtime
-
-      - name: Install ramen-ai-core (editable) and adapter
+      - name: Install ramen-ai-core and released TRACE packages
         run: |
           pip install -e core-clients/python
           pip install -e "plugins/cmcp-python[agentrust]"
 
-      - name: Emit a TRACE Trust Record from the V1 fixture receipt
-        run: >
-          python plugins/cmcp-python/examples/emit_record.py
-          --out /tmp/ramen-trust-record.jwt
+      - name: Emit a signed TRACE v0.2 Trust Record
+        run: |
+          TRACE_PRIVATE_KEY_PEM="$(openssl genpkey -algorithm ED25519)" \
+          python plugins/cmcp-python/examples/emit_record.py \
+            --out /tmp/ramen-trust-record.json \
+            --model-provider ramen-ai \
+            --model-id conformance-fixture-evaluator \
+            --model-version 1 \
+            --data-class internal \
+            --policy-bundle-hash sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+            --slsa-level 0 \
+            --build-digest sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb \
+            --builder https://github.com/ramen-ai/ramen-ai-integrations \
+            --appraisal-verifier https://ramenai.dev/trace/software-only
 
-      - name: TRACE conformance level 0
-        continue-on-error: true  # Upstream rejects plain signed records at level 0.
-        run: trace-tests verify --record /tmp/ramen-trust-record.jwt --level 0
+      - name: TRACE v0.2 conformance level 0
+        run: trace-tests verify --record /tmp/ramen-trust-record.json --level 0
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: trust-record-${{ matrix.os }}-py${{ matrix.python }}
-          path: /tmp/ramen-trust-record.jwt*
+          path: /tmp/ramen-trust-record.json

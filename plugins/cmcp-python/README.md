@@ -1,77 +1,51 @@
 # ramen-cmcp-adapter
 
-cMCP policy adapter and TRACE Trust Record exporter for the ramen-ai evaluation API.
+cMCP policy adapter and signed TRACE v0.2 Trust Record exporter for the ramen-ai evaluation API.
 
-Intercepts tool calls at the [cMCP](https://github.com/agentrust-io/cmcp) boundary, evaluates their semantic intent against configured compliance policies via the
-[ramen-ai](https://ramenai.dev) API, and maps the resulting V5 Ed25519-signed
-receipt onto a TRACE Trust Record ([EAT profile
-`tag:agentrust.io,2026:trace-v0.1`](https://github.com/agentrust-io/trace-spec)).
+The adapter evaluates MCP tool-call intent with ramen-ai and maps a verified V5 evaluation receipt into the TRACE EAT profile `tag:agentrust-io.com,2026:trace-v0.2`.
 
-## What it does
+## Trust boundary
 
-- **`RamenCmcpAdapter.evaluate(tool_call_payload)`** — takes a cMCP JSON-RPC
-  `tools/call` payload, serialises `params.name` + `params.arguments` as the
-  evaluated text, calls `POST /api/v1/paas/evaluate`, and returns an
-  `AdapterDecision` with `allowed: bool`, the raw V5 receipt, and a
-  `[DENIED] <steering>` message when the call is blocked.
-- **`build_trace_record(receipt, iat, jwk)`** — maps a ramen-ai V5 receipt onto
-  a TRACE Trust Record dict. Sign with `agentrust_trace.sign_record` to produce
-  a cMCP-compatible envelope for `trace-tests verify`.
-- **`verify_v5_receipt(receipt, original_input)`** — standalone two-step
-  verifier: Ed25519 signature over `canonical_payload`, then SHA-256 input
-  binding. Uses the built-in production key (`ramen_pk_v1`) and the conformance
-  doc ephemeral key (`ramen_pk_ephemeral_test`).
+This integration emits **TRACE Level 0** records only:
 
-## What it does NOT claim
+- `runtime.platform` is always `software-only`.
+- `runtime.measurement` is the conventional all-zero SHA-256 development measurement.
+- `appraisal.status` is always `none` because no hardware verifier is present.
+- The record is signed with a dedicated Ed25519 key from `TRACE_PRIVATE_KEY_PEM`.
+- The ramen-ai receipt key is used only to verify the upstream V5 receipt and is never reused for TRACE signing.
+- Level 1 hardware-attestation claims are intentionally rejected by the conformance suite.
 
-- The adapter does not modify the cMCP runtime, Cedar policies, or the upstream
-  MCP server. It is a pre-call evaluation hook only.
-- `runtime.platform` is `software-only`. No TEE or hardware attestation is
-  exercised by this integration.
-- TRACE conformance level 0 is targeted. The released `agentrust-trace-tests`
-  0.1.0 loader rejects plain records carrying a top-level `signature` field
-  (anti-downgrade), so the `trace-tests`-gradable output is the unsigned
-  payload; the signed form is written alongside it. See the
-  [SpendGuard integration](https://github.com/agentrust-io/integrations/tree/main/integrations/spendguard)
-  for the same limitation described in detail.
-- V5 receipts prove input binding, verdict, and policy UUIDs at the time of
-  evaluation. Policy *rule content* is mutable under the same UUID; see
-  `v5-conformance.md §6` for the full disclosure.
+## Public API
+
+- `RamenCmcpAdapter.evaluate(tool_call_payload)` evaluates a cMCP `tools/call` payload and returns an `AdapterDecision`.
+- `verify_v5_receipt(receipt, original_input)` verifies the V5 Ed25519 receipt and its SHA-256 input binding.
+- `build_trace_record(receipt, original_input=..., ...)` verifies the V5 receipt, requires caller-owned evidence that the receipt cannot supply, loads the dedicated TRACE key, and returns a natively signed TRACE v0.2 record.
 
 ## Requirements
 
-- Python ≥ 3.10
-- `ramen-ai-core >= 0.2.0` (editable install from this monorepo)
-- `cryptography >= 42.0.0`
+- Python 3.11 or newer
+- `ramen-ai-core >= 0.2.0`
+- `agentrust-trace == 0.5.1`
+- `agentrust-trace-tests == 0.4.1` for conformance checks
 
-Optional, for the TRACE conformance workflow:
-
-- `agentrust-trace >= 0.3.0`
-- `agentrust-trace-tests >= 0.1.0`
-
-## Installation
-
-From the monorepo root:
+Install from the monorepo root:
 
 ```bash
-# core adapter only
-pip install -e plugins/cmcp-python
-
-# with TRACE conformance tooling
-pip install -e "plugins/cmcp-python[agentrust]"
-
-# with test dependencies
+pip install -e core-clients/python
 pip install -e "plugins/cmcp-python[dev]"
 ```
 
 ## Configuration
 
 ```bash
-export RAMEN_API_KEY=ramen_ak_...        # required — ramen-ai platform token
-export OPENAI_API_KEY=sk-...             # required on Starter/Professional tiers (BYOK)
+export RAMEN_API_KEY=ramen_ak_...
+export OPENAI_API_KEY=sk_...
+export TRACE_PRIVATE_KEY_PEM="$(openssl genpkey -algorithm ED25519)"
 ```
 
-## cMCP policy enforcement
+The OpenSSL command is suitable for local testing. Production must inject a persistent, independently managed TRACE Ed25519 private key through its secret manager. If `TRACE_PRIVATE_KEY_PEM` is absent or invalid, record construction fails closed; no ephemeral fallback is generated.
+
+## Policy enforcement
 
 ```python
 import os
@@ -83,8 +57,7 @@ adapter = RamenCmcpAdapter(
     provider_key=os.environ.get("OPENAI_API_KEY"),
 )
 
-# cMCP JSON-RPC tool-call payload (method == "tools/call")
-tool_call = {
+decision = adapter.evaluate({
     "jsonrpc": "2.0",
     "id": 1,
     "method": "tools/call",
@@ -93,81 +66,88 @@ tool_call = {
         "arguments": {"query": "Acme Corp"},
         "_cmcp": {"session_id": "s1", "workflow_id": "my-agent"},
     },
-}
-
-decision = adapter.evaluate(tool_call)
+})
 
 if not decision.allowed:
-    # return deny to the cMCP gateway
     raise RuntimeError(decision.deny_message)
-
-# call is allowed — proceed to the MCP server
 ```
 
-`_cmcp.session_id` and `_cmcp.workflow_id` are forwarded to the ramen-ai audit
-log as context metadata. They are never included in the evaluated text.
+## TRACE export
 
-## TRACE Trust Record export
+The V5 receipt contract does not identify the model, classify the data, hash the policy artifact, or describe the adapter build. Those claims must be supplied by the caller rather than inferred from the evaluated input.
 
 ```python
+import hashlib
 import time
-import agentrust_trace
-from ramen_cmcp import build_trace_record, verify_v5_receipt
 
-# 1. Verify the V5 receipt before mapping
-valid, reason = verify_v5_receipt(receipt, original_input)
-assert valid, f"Receipt invalid: {reason}"
+from ramen_cmcp import build_trace_record
 
-# 2. Generate an ephemeral key for the TRACE record
-key = agentrust_trace.generate_key()
-jwk = agentrust_trace.key_to_jwk(key)
-
-# 3. Build the unsigned TRACE Trust Record
-record = build_trace_record(receipt, iat=int(time.time()), jwk=jwk)
-
-# 4. Sign and verify the round-trip
-signed = agentrust_trace.sign_record(record, key)
-agentrust_trace.verify_record(signed, allow_embedded_key=True)
+record = build_trace_record(
+    receipt,
+    original_input=original_input,
+    iat=int(time.time()),
+    model={
+        "provider": "your-provider",
+        "model_id": "your-model-id",
+        "version": "your-model-version",
+    },
+    data_class="internal",
+    policy_bundle_hash="sha256:" + hashlib.sha256(policy_artifact).hexdigest(),
+    build_provenance={
+        "slsa_level": 1,
+        "builder": "https://your-builder.example",
+        "digest": "sha256:" + hashlib.sha256(workload_artifact).hexdigest(),
+    },
+    appraisal_verifier="https://your-verifier.example/software-only",
+)
 ```
 
-See `examples/emit_record.py` for the full end-to-end script.
+`build_trace_record` first validates the ramen receipt signature and input binding. It then delegates key derivation, RFC 8785 canonicalization, and Ed25519 signing to `agentrust_trace.sign_record`. The returned object includes `cnf.jwk` and the top-level unpadded base64url `signature`.
 
-## TRACE field mapping
+## Field provenance
 
 | TRACE field | Source |
 |---|---|
-| `eat_profile` | `"tag:agentrust.io,2026:trace-v0.1"` (constant) |
-| `subject` | `"urn:ramen-ai:receipt:<kid>:<receipt.id>"` |
-| `policy.bundle_hash` | `canonical_payload.payload_hash` (SHA-256 of evaluated input) |
-| `policy.version` | `canonical_payload.schema_version` (`"5.0"`) |
-| `policy.enforcement_mode` | `"enforce"` (constant) |
-| `runtime.measurement` | `receipt.id` (UUID of the evaluation event) |
-| `runtime.platform` | `"software-only"` (constant) |
-| `tool_transcript.hash` | `canonical_payload.payload_hash` |
-| `tool_transcript.transcript_uri` | `"urn:ramen-ai:evaluation:<receipt.id>"` |
-| `appraisal.status` | `"affirming"` if `verdict==1`, else `"denying"` |
-| `appraisal.policy_ref` | comma-joined `canonical_payload.policy_ids` |
-| `appraisal.statutory_anchors` | `canonical_payload.statutory_anchors` (when non-empty) |
-| `appraisal.steering` | `canonical_payload.steering` (omitted when empty) |
+| `eat_profile` | TRACE v0.2 constant |
+| `subject` | Verified V5 receipt ID under the `ramenai.dev` SPIFFE trust domain |
+| `model` | Required caller evidence |
+| `runtime` | Fixed honest software-only Level 0 values |
+| `policy.bundle_hash` | Required caller digest of the policy artifact in force |
+| `policy.enforcement_mode` | `enforce`, matching the adapter's blocking behavior |
+| `data_class` | Required caller classification |
+| `build_provenance` | Required caller build evidence |
+| `appraisal` | `none`, caller-supplied verifier URI, and issue time |
+| `cnf.jwk`, `signature` | Native `agentrust_trace.sign_record` output |
 
-## Running the tests
+The Level 0 record deliberately omits:
+
+- `transparency`, because no SCITT receipt exists.
+- `tool_transcript`, because a ramen evaluation receipt is not the full MCP/A2A transcript. A future transcript-aware integration must supply an actual transcript digest rather than relabeling the receipt payload.
+
+## Tests and conformance
 
 ```bash
-pip install -e "plugins/cmcp-python[dev]"
 pytest plugins/cmcp-python/tests -v
 ```
 
-No network access or real credentials are required. HTTP calls are intercepted
-by `pytest-httpx`. The conformance vectors use the ephemeral key from
-`v5-conformance.md §3.2`, embedded in `_receipt_verify._AUDIT_PUBLIC_KEYS`.
+The suite asserts both sides of the trust boundary:
 
-## Running the conformance workflow locally
+1. A signed software-only record passes TRACE v0.2 Level 0.
+2. The same record fails Level 1 specifically at `TR-RTE-001` because `software-only` is not a hardware TEE platform.
+3. Invalid ramen receipt signatures and input bindings are rejected before TRACE signing.
+
+To run the CLI path, provide real metadata values:
 
 ```bash
-pip install -e "plugins/cmcp-python[agentrust]"
-python plugins/cmcp-python/examples/emit_record.py --out /tmp/trust-record.jwt
-trace-tests verify --record /tmp/trust-record.jwt --level 0
-```
+python plugins/cmcp-python/examples/emit_record.py \
+  --out /tmp/ramen-trust-record.json \
+  --model-provider your-provider \
+  --model-id your-model \
+  --data-class internal \
+  --policy-bundle-hash sha256:<64-lowercase-hex> \
+  --slsa-level 1 \
+  --build-digest sha256:<64-lowercase-hex> \
+  --appraisal-verifier https://your-verifier.example/software-only
 
-The CI workflow (`.github/workflows/ramen-cmcp-conformance.yml`) runs this
-matrix across Python 3.11–3.13 on every push that touches this plugin.
+trace-tests verify --record /tmp/ramen-trust-record.json --level 0
+```

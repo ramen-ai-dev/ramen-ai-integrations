@@ -1,10 +1,7 @@
-"""ramen_cmcp — cMCP policy adapter and TRACE Trust Record exporter.
+"""cMCP policy adapter and signed TRACE v0.2 Trust Record exporter.
 
-Public surface:
-    build_trace_record   Map a ramen-ai V5 receipt dict onto a TRACE Trust Record dict.
-    RamenCmcpAdapter     Evaluate a cMCP tool-call payload via the ramen-ai API and
-                         return an allow / deny decision structure.
-    verify_v5_receipt    Verify Ed25519 signature + SHA-256 input binding on a V5 receipt.
+``build_trace_record`` emits a software-only Level 0 record signed by the
+independent Ed25519 key in ``TRACE_PRIVATE_KEY_PEM``.
 """
 
 from .trace_mapper import build_trace_record

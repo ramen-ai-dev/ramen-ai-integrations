@@ -1,38 +1,21 @@
 #!/usr/bin/env python3
-"""Emit a TRACE Trust Record from a ramen-ai V5 receipt fixture.
-
-Loads ``examples/fixtures/vector1_allowed.json``, maps the receipt onto a TRACE
-Trust Record via :func:`ramen_cmcp.build_trace_record`, signs it with an
-ephemeral Ed25519 key via ``agentrust_trace.sign_record``, verifies the
-round-trip, and writes two files:
-
-  <out>              Unsigned record for ``trace-tests verify``
-  <out>.signed.json  Signed record, verifiable with
-                     ``agentrust_trace.verify_record(..., allow_embedded_key=True)``
-
-Requires the ``agentrust`` optional extras:
-    pip install -e "plugins/cmcp-python[agentrust]"
-
-Usage:
-    python examples/emit_record.py --out trust-record.jwt
-"""
+"""Emit a signed TRACE v0.2 software-only record from a V5 receipt fixture."""
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
 
-# allow running directly from the plugin root without installing
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 try:
     import agentrust_trace
 except ImportError as exc:
     sys.exit(
-        "agentrust_trace is required — install with:\n"
-        "  pip install -e 'plugins/cmcp-python[agentrust]'\n"
+        "agentrust_trace is required; install the ramen-cmcp-adapter package\n"
         f"Original error: {exc}"
     )
 
@@ -41,53 +24,72 @@ from ramen_cmcp import build_trace_record, verify_v5_receipt
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "vector1_allowed.json"
 
 
-def main() -> int:
+def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", required=True, help="Path for the trace-tests-gradable record")
+    parser.add_argument("--out", required=True, help="Signed TRACE JSON output path")
     parser.add_argument("--fixture", default=str(FIXTURE), help="V5 receipt fixture JSON")
-    args = parser.parse_args()
+    parser.add_argument("--model-provider", required=True)
+    parser.add_argument("--model-id", required=True)
+    parser.add_argument("--model-version")
+    parser.add_argument("--data-class", required=True)
+    parser.add_argument("--policy-bundle-hash", required=True)
+    parser.add_argument("--slsa-level", required=True, type=int, choices=range(4))
+    parser.add_argument("--build-digest", required=True)
+    parser.add_argument("--builder")
+    parser.add_argument("--provenance-uri")
+    parser.add_argument("--appraisal-verifier", required=True)
+    return parser
 
+
+def main() -> int:
+    args = _parser().parse_args()
     fixture = json.loads(Path(args.fixture).read_text(encoding="utf-8"))
     receipt: dict = fixture["receipt"]
-    original_input: str = fixture["input"]
 
-    # ── 1. verify the fixture receipt before mapping ───────────────────────
-    valid, reason = verify_v5_receipt(receipt, original_input)
+    valid, reason = verify_v5_receipt(receipt, fixture["input"])
     if not valid:
         print(f"ERROR: fixture receipt failed verification: {reason}", file=sys.stderr)
         return 1
-    print(f"Fixture receipt verified OK  (kid={receipt['kid']})")
+    print(f"Fixture receipt verified OK (kid={receipt['kid']})")
 
-    # ── 2. generate an ephemeral signing key for the TRACE record ──────────
-    key = agentrust_trace.generate_key()
-    jwk = agentrust_trace.key_to_jwk(key)
+    model = {"provider": args.model_provider, "model_id": args.model_id}
+    if args.model_version:
+        model["version"] = args.model_version
 
-    # ── 3. build the unsigned TRACE Trust Record ───────────────────────────
-    record = build_trace_record(receipt, iat=int(time.time()), jwk=jwk)
-    print(f"TRACE subject: {record['subject']}")
-    print(f"TRACE appraisal.status: {record['appraisal']['status']}")
+    build_provenance = {
+        "slsa_level": args.slsa_level,
+        "digest": args.build_digest,
+    }
+    if args.builder:
+        build_provenance["builder"] = args.builder
+    if args.provenance_uri:
+        build_provenance["provenance_uri"] = args.provenance_uri
 
-    # ── 4. sign and verify the round-trip ─────────────────────────────────
-    signed = agentrust_trace.sign_record(dict(record), key)
-    agentrust_trace.verify_record(signed, allow_embedded_key=True)
-    print("sign_record / verify_record round-trip OK")
+    record = build_trace_record(
+        receipt,
+        original_input=fixture["input"],
+        iat=int(time.time()),
+        model=model,
+        data_class=args.data_class,
+        policy_bundle_hash=args.policy_bundle_hash,
+        build_provenance=build_provenance,
+        appraisal_verifier=args.appraisal_verifier,
+    )
 
-    # ── 5. write output files ──────────────────────────────────────────────
+    pem = os.environ.get("TRACE_PRIVATE_KEY_PEM")
+    if not pem:
+        print("ERROR: TRACE_PRIVATE_KEY_PEM is required", file=sys.stderr)
+        return 1
+    trusted_jwk = agentrust_trace.key_to_jwk(agentrust_trace.load_key(pem))
+    agentrust_trace.verify_record(record, trusted_jwk)
+    print("Native sign_record / pinned-key verify_record round-trip OK")
+
     out = Path(args.out)
-    # trace-tests 0.1.0 rejects plain records carrying a top-level `signature`
-    # field (anti-downgrade), so the gradable file is the unsigned payload.
     out.write_text(
         json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n",
         encoding="utf-8",
     )
-    signed_out = out.with_name(out.name + ".signed.json")
-    signed_out.write_text(
-        json.dumps(signed, sort_keys=True, separators=(",", ":")) + "\n",
-        encoding="utf-8",
-    )
-
-    print(f"Unsigned (for trace-tests): {out}")
-    print(f"Signed   (verify_record OK): {signed_out}")
+    print(f"Signed TRACE v0.2 record: {out}")
     return 0
 
 

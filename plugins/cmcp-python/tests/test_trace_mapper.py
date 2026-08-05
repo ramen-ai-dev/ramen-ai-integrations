@@ -1,269 +1,251 @@
-"""Tests for ramen_cmcp.trace_mapper and ramen_cmcp._receipt_verify.
-
-Fixtures are the mathematically-verified V5 test vectors from
-v5-conformance.md §5. The ephemeral public key (ramen_pk_ephemeral_test)
-is embedded in _receipt_verify._AUDIT_PUBLIC_KEYS, so no network access or
-real credentials are needed to run these tests.
-"""
+"""Tests for V5 receipt verification and TRACE v0.2 record export."""
 from __future__ import annotations
 
 import hashlib
 import json
+import time
 from pathlib import Path
 
+import agentrust_trace
 import pytest
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    NoEncryption,
+    PrivateFormat,
+)
+from trace_tests.result import Status
+from trace_tests.runner import run as run_trace_tests
 
-from ramen_cmcp.trace_mapper import build_trace_record, _validate_receipt
 from ramen_cmcp._receipt_verify import verify_v5_receipt
+from ramen_cmcp.trace_mapper import (
+    EAT_PROFILE,
+    SOFTWARE_MEASUREMENT,
+    _validate_receipt,
+    build_trace_record,
+)
 
 FIXTURES = Path(__file__).resolve().parents[1] / "examples" / "fixtures"
+POLICY_BUNDLE_HASH = "sha256:" + hashlib.sha256(b"test-policy-bundle").hexdigest()
+BUILD_DIGEST = "sha256:" + hashlib.sha256(b"ramen-cmcp-adapter-test-artifact").hexdigest()
+MODEL = {"provider": "test-provider", "model_id": "test-evaluator", "version": "1"}
+BUILD_PROVENANCE = {
+    "slsa_level": 0,
+    "builder": "https://github.com/ramen-ai/ramen-ai-integrations",
+    "digest": BUILD_DIGEST,
+}
+APPRAISAL_VERIFIER = "https://ramenai.dev/trace/software-only"
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def _load(name: str) -> dict:
     return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
-def _dummy_jwk() -> dict:
-    return {"kty": "OKP", "crv": "Ed25519", "x": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}
+def _private_key_pem(key: object) -> str:
+    return key.private_bytes(  # type: ignore[union-attr]
+        encoding=Encoding.PEM,
+        format=PrivateFormat.PKCS8,
+        encryption_algorithm=NoEncryption(),
+    ).decode("ascii")
 
 
-# ---------------------------------------------------------------------------
-# verify_v5_receipt — conformance vectors
-# ---------------------------------------------------------------------------
+@pytest.fixture
+def trace_key(monkeypatch: pytest.MonkeyPatch):
+    key = agentrust_trace.generate_key()
+    monkeypatch.setenv("TRACE_PRIVATE_KEY_PEM", _private_key_pem(key))
+    return key
+
+
+def _build(fixture: dict, *, iat: int) -> dict:
+    return build_trace_record(
+        fixture["receipt"],
+        original_input=fixture["input"],
+        iat=iat,
+        model=MODEL,
+        data_class="internal",
+        policy_bundle_hash=POLICY_BUNDLE_HASH,
+        build_provenance=BUILD_PROVENANCE,
+        appraisal_verifier=APPRAISAL_VERIFIER,
+    )
+
 
 class TestVerifyV5Receipt:
     def test_vector1_allowed_valid(self):
-        f = _load("vector1_allowed.json")
-        valid, reason = verify_v5_receipt(f["receipt"], f["input"])
-        assert valid is True
-        assert reason is None
-
-    def test_vector1_verdict_is_1(self):
-        f = _load("vector1_allowed.json")
-        payload = json.loads(f["receipt"]["canonical_payload"])
-        assert payload["verdict"] == 1
-
-    def test_vector1_reasoning_empty(self):
-        f = _load("vector1_allowed.json")
-        payload = json.loads(f["receipt"]["canonical_payload"])
-        assert payload["reasoning"] == ""
-
-    def test_vector1_steering_empty(self):
-        f = _load("vector1_allowed.json")
-        payload = json.loads(f["receipt"]["canonical_payload"])
-        assert payload["steering"] == ""
+        fixture = _load("vector1_allowed.json")
+        assert verify_v5_receipt(fixture["receipt"], fixture["input"]) == (True, None)
 
     def test_vector2_blocked_valid(self):
-        f = _load("vector2_blocked.json")
-        valid, reason = verify_v5_receipt(f["receipt"], f["input"])
-        assert valid is True
-        assert reason is None
+        fixture = _load("vector2_blocked.json")
+        assert verify_v5_receipt(fixture["receipt"], fixture["input"]) == (True, None)
 
-    def test_vector2_verdict_is_0(self):
-        f = _load("vector2_blocked.json")
-        payload = json.loads(f["receipt"]["canonical_payload"])
-        assert payload["verdict"] == 0
+    def test_payload_hashes_bind_original_inputs(self):
+        for name in ("vector1_allowed.json", "vector2_blocked.json"):
+            fixture = _load(name)
+            payload = json.loads(fixture["receipt"]["canonical_payload"])
+            assert payload["payload_hash"] == hashlib.sha256(
+                fixture["input"].encode("utf-8")
+            ).hexdigest()
 
-    def test_vector2_reasoning_nonempty(self):
-        f = _load("vector2_blocked.json")
-        payload = json.loads(f["receipt"]["canonical_payload"])
-        assert payload["reasoning"] != ""
-
-    def test_vector2_steering_equals_expected(self):
-        f = _load("vector2_blocked.json")
-        payload = json.loads(f["receipt"]["canonical_payload"])
-        assert payload["steering"] == f["expected"]["steering"]
-
-    def test_vector1_payload_hash_matches_sha256_of_input(self):
-        f = _load("vector1_allowed.json")
-        expected = hashlib.sha256(f["input"].encode("utf-8")).hexdigest()
-        payload = json.loads(f["receipt"]["canonical_payload"])
-        assert payload["payload_hash"] == expected
-
-    def test_vector2_payload_hash_matches_sha256_of_input(self):
-        f = _load("vector2_blocked.json")
-        expected = hashlib.sha256(f["input"].encode("utf-8")).hexdigest()
-        payload = json.loads(f["receipt"]["canonical_payload"])
-        assert payload["payload_hash"] == expected
-
-    # ── negative vectors ────────────────────────────────────────────────────
-
-    def test_n1_tampered_signature_fails(self):
-        """N1: flipped final base64url char — signature verification must fail."""
-        f = _load("vector_n1_bad_sig.json")
-        valid, reason = verify_v5_receipt(f["receipt"], f["input"])
+    def test_tampered_signature_fails(self):
+        fixture = _load("vector_n1_bad_sig.json")
+        valid, reason = verify_v5_receipt(fixture["receipt"], fixture["input"])
         assert valid is False
-        assert reason is not None
-        assert "Signature" in reason or "signature" in reason
+        assert "signature" in (reason or "").lower()
 
-    def test_n2_wrong_input_fails_binding(self):
-        """N2: authentic receipt, different input — payload_hash binding must fail."""
-        f = _load("vector1_allowed.json")
-        tampered_input = f["input"] + " "  # trailing space changes SHA-256
-        valid, reason = verify_v5_receipt(f["receipt"], tampered_input)
+    def test_wrong_input_fails_binding(self):
+        fixture = _load("vector1_allowed.json")
+        valid, reason = verify_v5_receipt(
+            fixture["receipt"], fixture["input"] + " "
+        )
         assert valid is False
-        assert reason is not None
-        assert "payload_hash" in reason
-
-    def test_n2_original_input_still_passes(self):
-        """Control: the same receipt with the original input must still pass."""
-        f = _load("vector1_allowed.json")
-        valid, reason = verify_v5_receipt(f["receipt"], f["input"])
-        assert valid is True
-        assert reason is None
+        assert "payload_hash" in (reason or "")
 
     def test_unknown_kid_fails(self):
-        f = _load("vector1_allowed.json")
-        bad_receipt = dict(f["receipt"], kid="ramen_pk_unknown_xyz")
-        valid, reason = verify_v5_receipt(bad_receipt, f["input"])
+        fixture = _load("vector1_allowed.json")
+        receipt = dict(fixture["receipt"], kid="ramen_pk_unknown_xyz")
+        valid, reason = verify_v5_receipt(receipt, fixture["input"])
         assert valid is False
         assert "Unknown kid" in (reason or "")
 
 
-# ---------------------------------------------------------------------------
-# build_trace_record — field mapping
-# ---------------------------------------------------------------------------
-
 class TestBuildTraceRecord:
-    @pytest.fixture(scope="class")
-    @classmethod
-    def v1_record(cls):
-        f = _load("vector1_allowed.json")
-        return build_trace_record(f["receipt"], iat=1_800_000_000, jwk=_dummy_jwk())
+    @pytest.fixture
+    def allowed_record(self, trace_key):
+        return _build(_load("vector1_allowed.json"), iat=1_800_000_000)
 
-    @pytest.fixture(scope="class")
-    @classmethod
-    def v2_record(cls):
-        f = _load("vector2_blocked.json")
-        return build_trace_record(f["receipt"], iat=1_800_000_001, jwk=_dummy_jwk())
+    @pytest.fixture
+    def blocked_record(self, trace_key):
+        return _build(_load("vector2_blocked.json"), iat=1_800_000_001)
 
-    # ── structural ──────────────────────────────────────────────────────────
+    def test_v02_profile_and_complete_required_claims(self, allowed_record):
+        assert allowed_record["eat_profile"] == EAT_PROFILE
+        assert allowed_record["model"] == MODEL
+        assert allowed_record["data_class"] == "internal"
+        assert allowed_record["build_provenance"] == BUILD_PROVENANCE
+        assert allowed_record["policy"]["bundle_hash"] == POLICY_BUNDLE_HASH
 
-    def test_eat_profile(self, v1_record):
-        assert v1_record["eat_profile"] == "tag:agentrust.io,2026:trace-v0.1"
+    def test_strict_software_only_semantics(self, allowed_record):
+        assert allowed_record["runtime"] == {
+            "platform": "software-only",
+            "measurement": SOFTWARE_MEASUREMENT,
+        }
+        assert allowed_record["appraisal"] == {
+            "status": "none",
+            "verifier": APPRAISAL_VERIFIER,
+            "timestamp": 1_800_000_000,
+        }
+        assert "transparency" not in allowed_record
 
-    def test_iat_is_passed_through(self, v1_record):
-        assert v1_record["iat"] == 1_800_000_000
-
-    def test_cnf_jwk_is_embedded(self, v1_record):
-        assert v1_record["cnf"]["jwk"] == _dummy_jwk()
-
-    def test_transparency_is_pending(self, v1_record):
-        assert v1_record["transparency"] == "pending"
-
-    def test_runtime_platform_software_only(self, v1_record):
-        assert v1_record["runtime"]["platform"] == "software-only"
-
-    def test_tool_transcript_call_count_is_1(self, v1_record):
-        assert v1_record["tool_transcript"]["call_count"] == 1
-
-    def test_no_cmcp_envelope_markers(self, v1_record):
-        """trace-tests 0.1.0 rejects plain records with these top-level keys."""
-        assert not {"signature", "trace", "gateway"} & v1_record.keys()
-
-    # ── field mapping — allowed receipt ─────────────────────────────────────
-
-    def test_subject_encodes_kid_and_receipt_id(self, v1_record):
-        f = _load("vector1_allowed.json")
-        receipt = f["receipt"]
-        assert v1_record["subject"] == (
+    def test_subject_binds_receipt_without_false_transcript_claim(self, allowed_record):
+        receipt = _load("vector1_allowed.json")["receipt"]
+        assert allowed_record["subject"] == (
             f"spiffe://ramenai.dev/evaluation/{receipt['id']}"
         )
+        assert "tool_transcript" not in allowed_record
 
-    def test_policy_bundle_hash_is_prefixed_payload_hash(self, v1_record):
-        f = _load("vector1_allowed.json")
-        payload = json.loads(f["receipt"]["canonical_payload"])
-        assert v1_record["policy"]["bundle_hash"] == f"sha256:{payload['payload_hash']}"
-
-    def test_policy_version_is_schema_version(self, v1_record):
-        assert v1_record["policy"]["version"] == "5.0"
-
-    def test_policy_enforcement_mode_is_enforce(self, v1_record):
-        assert v1_record["policy"]["enforcement_mode"] == "enforce"
-
-    def test_runtime_measurement_is_receipt_id(self, v1_record):
-        f = _load("vector1_allowed.json")
-        assert v1_record["runtime"]["measurement"] == f["receipt"]["id"]
-
-    def test_tool_transcript_hash_is_prefixed_payload_hash(self, v1_record):
-        f = _load("vector1_allowed.json")
-        payload = json.loads(f["receipt"]["canonical_payload"])
-        assert v1_record["tool_transcript"]["hash"] == f"sha256:{payload['payload_hash']}"
-
-    def test_transcript_uri_encodes_receipt_id(self, v1_record):
-        f = _load("vector1_allowed.json")
-        assert v1_record["tool_transcript"]["transcript_uri"] == (
-            f"urn:ramen-ai:evaluation:{f['receipt']['id']}"
+    def test_native_signature_uses_dedicated_trace_key(self, allowed_record, trace_key):
+        expected_jwk = agentrust_trace.key_to_jwk(trace_key)
+        assert allowed_record["cnf"]["jwk"] == expected_jwk
+        assert allowed_record["signature"]
+        assert "=" not in allowed_record["signature"]
+        agentrust_trace.verify_record(
+            allowed_record,
+            expected_jwk,
+            max_age_seconds=None,
         )
 
-    def test_appraisal_policy_ref_contains_policy_id(self, v1_record):
-        assert "f47ac10b-58cc-4372-a567-0e02b2c3d479" in v1_record["appraisal"]["policy_ref"]
+    def test_blocked_receipt_does_not_claim_hardware_appraisal(self, blocked_record):
+        assert blocked_record["appraisal"]["status"] == "none"
+        assert blocked_record["runtime"]["platform"] == "software-only"
 
-    def test_appraisal_status_affirming_for_allowed(self, v1_record):
-        assert v1_record["appraisal"]["status"] == "affirming"
+    def test_forged_receipt_is_never_trace_signed(self, trace_key):
+        fixture = _load("vector_n1_bad_sig.json")
+        with pytest.raises(ValueError, match="V5 receipt verification failed"):
+            _build(fixture, iat=1_800_000_000)
 
-    def test_appraisal_statutory_anchors_populated(self, v1_record):
-        assert "FCA COBS 4.2.1" in v1_record["appraisal"]["statutory_anchors"]
+    def test_wrong_original_input_is_never_trace_signed(self, trace_key):
+        fixture = _load("vector1_allowed.json")
+        fixture["input"] += " "
+        with pytest.raises(ValueError, match="V5 receipt verification failed"):
+            _build(fixture, iat=1_800_000_000)
 
-    def test_steering_omitted_when_empty(self, v1_record):
-        """Vector 1 has empty steering — must not appear in the record."""
-        assert "steering" not in v1_record["appraisal"]
+    def test_missing_trace_private_key_fails_closed(self, monkeypatch):
+        monkeypatch.delenv("TRACE_PRIVATE_KEY_PEM", raising=False)
+        with pytest.raises(RuntimeError, match="TRACE_PRIVATE_KEY_PEM is required"):
+            _build(_load("vector1_allowed.json"), iat=1_800_000_000)
 
-    # ── field mapping — blocked receipt ─────────────────────────────────────
+    def test_non_ed25519_trace_private_key_is_rejected(self, monkeypatch):
+        monkeypatch.setenv(
+            "TRACE_PRIVATE_KEY_PEM",
+            "-----BEGIN PRIVATE KEY-----\ninvalid\n-----END PRIVATE KEY-----",
+        )
+        with pytest.raises(ValueError, match="not a valid private key"):
+            _build(_load("vector1_allowed.json"), iat=1_800_000_000)
 
-    def test_appraisal_status_denying_for_blocked(self, v2_record):
-        assert v2_record["appraisal"]["status"] == "denying"
+    def test_required_caller_evidence_is_validated(self, trace_key):
+        fixture = _load("vector1_allowed.json")
+        with pytest.raises(ValueError, match="policy_bundle_hash"):
+            build_trace_record(
+                fixture["receipt"],
+                original_input=fixture["input"],
+                iat=1_800_000_000,
+                model=MODEL,
+                data_class="internal",
+                policy_bundle_hash="not-a-digest",
+                build_provenance=BUILD_PROVENANCE,
+                appraisal_verifier=APPRAISAL_VERIFIER,
+            )
 
-    def test_appraisal_statutory_anchors_for_blocked(self, v2_record):
-        anchors = v2_record["appraisal"]["statutory_anchors"]
-        assert "FCA PRIN 2A.2.8" in anchors
-        assert "MiFID II Art. 25" in anchors
+    def test_receipt_identity_must_match_signed_payload(self, trace_key):
+        fixture = _load("vector1_allowed.json")
+        fixture["receipt"] = dict(
+            fixture["receipt"], id="00000000-0000-0000-0000-000000000000"
+        )
+        with pytest.raises(ValueError, match="does not match canonical_payload"):
+            _build(fixture, iat=1_800_000_000)
 
-    def test_steering_present_when_nonempty(self, v2_record):
-        """Vector 2 has non-empty steering — must appear in appraisal."""
-        assert "steering" in v2_record["appraisal"]
-        assert v2_record["appraisal"]["steering"] != ""
-
-    # ── _validate_receipt guards ─────────────────────────────────────────────
-
-    def test_missing_field_raises(self):
+    def test_missing_receipt_field_raises(self):
         with pytest.raises(ValueError, match="missing required fields"):
             _validate_receipt({"id": "x", "schema_version": "5.0", "kid": "k"})
 
-    def test_wrong_schema_version_raises(self):
-        f = _load("vector1_allowed.json")
-        bad = dict(f["receipt"], schema_version="4.0")
+    def test_wrong_receipt_schema_version_raises(self):
+        fixture = _load("vector1_allowed.json")
+        receipt = dict(fixture["receipt"], schema_version="4.0")
         with pytest.raises(ValueError, match="schema_version"):
-            _validate_receipt(bad)
+            _validate_receipt(receipt)
 
     def test_invalid_canonical_payload_json_raises(self):
-        f = _load("vector1_allowed.json")
-        bad = dict(f["receipt"], canonical_payload="{not json}")
+        fixture = _load("vector1_allowed.json")
+        receipt = dict(fixture["receipt"], canonical_payload="{not json}")
         with pytest.raises(ValueError, match="canonical_payload"):
-            _validate_receipt(bad)
+            _validate_receipt(receipt)
 
-    # ── tamper probe ─────────────────────────────────────────────────────────
 
-    def test_tampered_policy_hash_changes_record(self):
-        """Mutating the fixture canonical_payload must change bundle_hash."""
-        f = _load("vector1_allowed.json")
-        original_record = build_trace_record(
-            f["receipt"], iat=1_800_000_000, jwk=_dummy_jwk()
-        )
-        # Build a tampered receipt with a different payload_hash
-        payload = json.loads(f["receipt"]["canonical_payload"])
-        payload["payload_hash"] = "a" * 64
-        tampered_receipt = dict(
-            f["receipt"],
-            canonical_payload=json.dumps(payload, separators=(",", ":")),
-        )
-        # _validate_receipt won't fail (structure is valid) but the mapping
-        # must reflect the tampered hash — and the original hash must differ.
-        tampered_record = build_trace_record(
-            tampered_receipt, iat=1_800_000_000, jwk=_dummy_jwk()
-        )
-        assert tampered_record["policy"]["bundle_hash"] == f"sha256:{'a' * 64}"
-        assert original_record["policy"]["bundle_hash"] != tampered_record["policy"]["bundle_hash"]
+class TestTraceConformance:
+    def test_signed_software_record_passes_level_0(self, trace_key):
+        record = _build(_load("vector1_allowed.json"), iat=int(time.time()))
+        results = run_trace_tests(record, "trace", level=0)
+        failures = [
+            finding
+            for findings in results.values()
+            for finding in findings
+            if finding.status is Status.FAIL
+        ]
+        assert failures == []
+
+    def test_signed_software_record_fails_only_level_1_runtime_rule(self, trace_key):
+        record = _build(_load("vector1_allowed.json"), iat=int(time.time()))
+        results = run_trace_tests(record, "trace", level=1)
+        failures = [
+            finding
+            for findings in results.values()
+            for finding in findings
+            if finding.status is Status.FAIL
+        ]
+        assert [(finding.code, finding.message) for finding in failures] == [
+            (
+                "TR-RTE-001",
+                "TR-RTE-001: runtime.platform 'software-only' is development-mode "
+                "and not acceptable for hardware-attested levels (Level 1 requires "
+                "a hardware TEE platform)",
+            )
+        ]
