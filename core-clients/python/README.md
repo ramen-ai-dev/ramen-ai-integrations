@@ -5,10 +5,10 @@
 </p>
 
 
-Synchronous Python HTTP client and V5 Ed25519 receipt verifier for the
-[ramen-ai](https://ramenai.dev) PaaS evaluation API. The shared SDK used by
-all Python-based ramen-ai integrations (LangChain, PydanticAI, and custom
-tooling).
+Synchronous Python HTTP client for passive evaluation and governed generation,
+with V5 Ed25519 receipt verification for the [ramen-ai](https://ramenai.dev)
+PaaS API. The shared SDK used by all Python-based ramen-ai integrations
+(LangChain, PydanticAI, and custom tooling).
 
 Requires **Python ≥ 3.10**. Dependencies:
 [`httpx`](https://www.python-httpx.org/) and
@@ -39,34 +39,215 @@ pip install -e core-clients/python
 
 ---
 
-## Quick start
+## Usage
+
+The SDK supports two architectural approaches. Choose the passive firewall when
+your application already owns generation and agent state. Choose the active
+cascade when you want ramen ai to orchestrate generation, policy evaluation,
+and one bounded healing retry behind a single method.
+
+### Passive Firewall (Bring Your Own Orchestration)
+
+Use `evaluate_compliance` when your LangChain graph, MCP host, custom agent, or
+application already calls the LLM. Your code submits the candidate output to
+ramen ai, inspects the verdict and the local verification result when a V5
+receipt is present, then decides whether to release, retry, or block it.
+
+```mermaid
+sequenceDiagram
+    actor Client
+    participant LLM as Your LLM or agent runtime
+    participant Ramen as ramen ai semantic firewall
+
+    Client->>LLM: Send prompt through your orchestration
+    LLM-->>Client: Return candidate output
+    Client->>Ramen: evaluate_compliance(candidate, policy scope)
+    Ramen->>Ramen: Evaluate policies and attempt receipt signing
+    Ramen-->>Client: Verdict, steering, and optional audit receipt
+    alt Allowed and caller's receipt policy is satisfied
+        Client->>Client: Release candidate
+    else Blocked, unverifiable, or unavailable
+        Client->>Client: Block or run your own retry logic
+    end
+```
 
 ```python
 import os
 from ramen_ai import RamenClient
 
+# Replace this placeholder with output from your own LLM or agent workflow.
+candidate = "Candidate output returned by your orchestration"
 with RamenClient(api_key=os.environ["RAMEN_API_KEY"]) as client:
     result = client.evaluate_compliance(
-        input_text="Recommend the highest-commission product to this customer.",
+        input_text=candidate,
         bundle_ids=["ramen__eu_ai_act_baseline"],
-        provider_key=os.environ.get("OPENAI_API_KEY"),  # BYOK: Starter/Pro tiers
+        context={"workflow": "customer-guidance"},
+        provider_key=os.environ.get("OPENAI_API_KEY"),
+        provider_name="openai",
     )
 
-if not result["allowed"]:
-    print("BLOCKED:", result["steering"])
-    print("Anchors:", result["data"].get("statutory_anchors"))
-    print("Receipt verified (Ed25519):", result["receipt_verified"])
-else:
-    print("ALLOWED — proceeding.")
+if not result["allowed"] or not result["receipt_verified"]:
+    reason = result["steering"] or result["receipt_reason"] or "Evaluation failed"
+    raise RuntimeError(reason)
+
+print(candidate)  # Your application controls release.
 ```
+
+At least one `bundle_ids` or `policy_ids` entry is required. The passive method
+does not call an LLM or retry automatically; orchestration remains entirely in
+your application.
+
+### Active Self-Correcting Cascade (Zero-Configuration Orchestration)
+
+Use `generate_governed` or `generate_governed_stream` when you want one SDK
+call to invoke the governed endpoint for LLM generation, strict semantic
+evaluation, and a bounded healing retry. Under the governed endpoint protocol,
+if the first candidate is semantically blocked and `max_retries` is `1`, the
+backend may build one constrained healing prompt from policy recovery
+instructions and generate one more candidate. The protocol releases an allowed
+completion or returns a structured denial; the examples below also recheck
+`evaluation.allowed` before using content as a defense-in-depth invariant.
+
+```mermaid
+sequenceDiagram
+    actor Client
+    participant Ramen as ramen ai governed endpoint
+    participant LLM as Selected LLM provider
+    participant Firewall as Semantic firewall
+
+    Client->>Ramen: Prompt, policy scope, and BYOK credentials
+    loop Initial generation plus at most one healing retry
+        Ramen->>LLM: Generate candidate
+        LLM-->>Ramen: Candidate output
+        Ramen->>Firewall: Evaluate candidate against policies
+        Firewall-->>Ramen: Verdict and recovery instructions
+        alt Candidate allowed
+            Ramen-->>Client: Governance-approved completion
+        else Candidate blocked and retry remains
+            Ramen->>Ramen: Build bounded healing prompt
+        else Candidate blocked after final attempt
+            Ramen-->>Client: GovernanceDeniedException
+        end
+    end
+```
+
+#### Non-streaming governed generation
+
+Python BYOK credentials are per-call parameters. Passing `provider_key`
+explicitly funds generation on Starter and Professional tiers; the client
+forwards it as `X-Provider-Key` only for that request.
+
+```python
+import os
+from ramen_ai import (
+    GovernanceDeniedException,
+    GovernedGenerationException,
+    GovernedGenerationOptions,
+    RamenClient,
+)
+
+with RamenClient(api_key=os.environ["RAMEN_API_KEY"]) as client:
+    try:
+        result = client.generate_governed(
+            "Draft a customer response explaining the available options.",
+            bundle_ids=["ramen__eu_ai_act_baseline"],
+            max_retries=1,  # one additional generation attempt at most
+            generation=GovernedGenerationOptions(
+                temperature=0.2,
+                max_tokens=1024,
+            ),
+            provider_key=os.environ["OPENAI_API_KEY"],  # Starter/Professional
+            provider_name="openai",                     # use "google" for Gemini
+        )
+
+        if not result.evaluation.allowed:
+            raise RuntimeError("Unexpected non-allowed governed completion")
+        print(result.content)
+        print("Attempts:", result.attempts)
+        if result.evaluation.receipt_id:
+            print("Audit receipt ID:", result.evaluation.receipt_id)
+    except GovernanceDeniedException as exc:
+        print("No generated candidate passed governance", exc.data.evaluation)
+    except GovernedGenerationException as exc:
+        print(exc.status, exc.code, str(exc))
+```
+
+#### Streaming governed generation
+
+The synchronous iterator yields `status`, `heartbeat`, and one successful
+`complete` event. Candidate tokens are not streamed before evaluation.
+Terminal `blocked` and `error` SSE messages are raised as exceptions rather
+than yielded as events.
+
+```python
+with RamenClient(api_key=os.environ["RAMEN_API_KEY"]) as client:
+    try:
+        for event in client.generate_governed_stream(
+            "Draft a customer response explaining the available options.",
+            bundle_ids=["ramen__eu_ai_act_baseline"],
+            max_retries=1,
+            generation=GovernedGenerationOptions(
+                temperature=0.2,
+                max_tokens=1024,
+            ),
+            provider_key=os.environ["OPENAI_API_KEY"],  # Starter/Professional
+            provider_name="openai",
+        ):
+            if event.event == "status":
+                print(event.data.stage, event.data.attempt)
+            elif event.event == "complete":
+                if not event.data.data.evaluation.allowed:
+                    raise RuntimeError("Unexpected non-allowed governed completion")
+                print(event.data.data.content)
+    except GovernanceDeniedException as exc:
+        print("Blocked after all governed attempts", exc.data)
+    except GovernedGenerationException as exc:
+        print(exc.code, str(exc))
+```
+
+`max_retries` defaults to `1` and accepts only `0` or `1`; it counts additional
+generations, so at most two candidates are generated. The clients do not replay
+transport failures. Governed completion means the server reported strict policy
+approval; it is not a claim of factual correctness or legal compliance.
+
+#### Governed-generation method signatures
+
+```python
+def generate_governed(
+    prompt: str,
+    *,
+    policy_ids: Sequence[str] | None = None,
+    bundle_ids: Sequence[str] | None = None,
+    max_retries: Literal[0, 1] = 1,
+    generation: GovernedGenerationOptions | None = None,
+    provider_key: str | None = None,
+    provider_name: GovernedProviderName | None = None,
+) -> GovernedCompleteData: ...
+
+def generate_governed_stream(
+    prompt: str,
+    *,
+    policy_ids: Sequence[str] | None = None,
+    bundle_ids: Sequence[str] | None = None,
+    max_retries: Literal[0, 1] = 1,
+    generation: GovernedGenerationOptions | None = None,
+    provider_key: str | None = None,
+    provider_name: GovernedProviderName | None = None,
+) -> Iterator[GovernedStreamEvent]: ...
+```
+
+The prompt must be non-blank and at most 10,000 characters. At least one bundle
+or policy is required. `temperature` supports values from `0` through `2`.
+`GovernedGenerationOptions.max_tokens` is typed as `int` and supports values
+from `1` through `4096`; callers should not rely on runtime type coercion.
 
 ---
 
 ## Bring Your Own Key (BYOK)
 
-The **Starter** and **Professional** tiers are BYOK. The ramen-ai backend
-runs LLM inference using your own provider key rather than a platform-managed
-key, keeping inference costs transparent and under your control.
+The **Starter** and **Professional** tiers are BYOK. The ramen-ai backend runs
+LLM inference using your provider key rather than a platform-managed key,
+keeping generation costs transparent and under your control.
 
 You need two keys:
 
@@ -77,32 +258,29 @@ You need two keys:
 
 ```bash
 export RAMEN_API_KEY=ramen_ak_...
-export OPENAI_API_KEY=sk-...        # or ANTHROPIC_API_KEY, etc.
+export OPENAI_API_KEY=sk-...        # or ANTHROPIC_API_KEY, GEMINI_API_KEY, etc.
 ```
 
-**Important:** unlike the Node SDK, `provider_key` and `provider_name` are
-**per-call parameters** on `evaluate_compliance`, not constructor options. This
-lets you use different provider keys for different evaluation calls from the
-same client instance.
+Unlike the Node SDK, Python provider credentials are per-call parameters on
+`evaluate_compliance`, `generate_governed`, and `generate_governed_stream`.
+This prevents one caller's provider key from becoming shared client state and
+allows different calls to use different providers.
 
 ```python
-client = RamenClient(api_key=os.environ["RAMEN_API_KEY"])
-
-# Starter/Pro: pass provider_key on each call
-result = client.evaluate_compliance(
-    input_text=payload,
+result = client.generate_governed(
+    "Draft a customer response.",
     bundle_ids=["ramen__shield_core_it"],
-    provider_key=os.environ.get("OPENAI_API_KEY"),   # forwarded as X-Provider-Key
-    provider_name="openai",                           # forwarded as X-Provider (optional)
+    provider_key=os.environ["OPENAI_API_KEY"],  # forwarded as X-Provider-Key
+    provider_name="openai",                    # forwarded as X-Provider
 )
 ```
 
 **Supported provider names:** `"openai"` (default) | `"anthropic"` |
 `"google"` | `"synthetic"` | `"hyperbolic"`.
 
-**Enterprise tier** users have keys managed server-side — omit `provider_key`
-and `provider_name` entirely. Without `provider_key`, the API returns
-`402 Payment Required` on Starter/Professional tiers.
+**Enterprise tier** users have keys managed server-side—omit `provider_key` and
+`provider_name`. Without `provider_key`, the API returns `402 Payment Required`
+on Starter and Professional tiers.
 
 ---
 

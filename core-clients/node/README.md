@@ -5,12 +5,12 @@
 </p>
 
 
-Agnostic Node.js HTTP client and V5 Ed25519 receipt verifier for the
-[ramen-ai](https://ramenai.dev) PaaS evaluation API. The shared SDK used by
-all Node-based ramen-ai integrations (AGT middleware, GitHub Action, MCP proxy,
-and custom tooling).
+Agnostic Node.js HTTP client for passive evaluation and governed generation,
+with V5 Ed25519 receipt verification for the [ramen-ai](https://ramenai.dev)
+PaaS API. The shared SDK used by all Node-based ramen-ai integrations (AGT
+middleware, GitHub Action, MCP proxy, and custom tooling).
 
-Requires **Node.js ≥ 18**. Uses the global `fetch` and `crypto.subtle`
+Requires **Node.js ≥ 24**. Uses the global `fetch` and `crypto.subtle`
 (Web Crypto) — zero runtime dependencies.
 
 ---
@@ -40,37 +40,218 @@ Or reference it locally from the monorepo:
 
 ---
 
-## Quick start
+## Usage
+
+The SDK supports two architectural approaches. Choose the passive firewall when
+your application already owns generation and agent state. Choose the active
+cascade when you want ramen ai to orchestrate generation, policy evaluation,
+and one bounded healing retry behind a single method.
+
+### Passive Firewall (Bring Your Own Orchestration)
+
+Use `evaluateCompliance` when your LangChain graph, MCP host, custom agent, or
+application already calls the LLM. Your code submits the candidate output to
+ramen ai, inspects the verdict and the local verification result when a V5
+receipt is present, then decides whether to release, retry, or block it.
+
+```mermaid
+sequenceDiagram
+    actor Client
+    participant LLM as Your LLM or agent runtime
+    participant Ramen as ramen ai semantic firewall
+
+    Client->>LLM: Send prompt through your orchestration
+    LLM-->>Client: Return candidate output
+    Client->>Ramen: evaluateCompliance(candidate, policy scope)
+    Ramen->>Ramen: Evaluate policies and attempt receipt signing
+    Ramen-->>Client: Verdict, steering, and optional audit receipt
+    alt Allowed and caller's receipt policy is satisfied
+        Client->>Client: Release candidate
+    else Blocked, unverifiable, or unavailable
+        Client->>Client: Block or run your own retry logic
+    end
+```
 
 ```ts
 import { RamenClient } from "@ramen-ai/node-core";
 
-const client = new RamenClient({
+const firewall = new RamenClient({
   apiKey: process.env.RAMEN_API_KEY!,
-  providerKey: process.env.OPENAI_API_KEY, // BYOK: required on Starter/Pro tiers
+  providerKey: process.env.OPENAI_API_KEY, // Starter/Professional BYOK
+  providerName: "openai",
 });
 
-const verdict = await client.evaluateCompliance(
-  "Recommend the highest-commission product to this customer.",
-  { bundleIds: ["ramen__eu_ai_act_baseline"] },
-);
+// Replace this placeholder with output from your own LLM or agent workflow.
+const candidate = "Candidate output returned by your orchestration";
+const verdict = await firewall.evaluateCompliance(candidate, {
+  bundleIds: ["ramen__eu_ai_act_baseline"],
+  context: { workflow: "customer-guidance" },
+});
 
-if (!verdict.allowed) {
-  console.error("BLOCKED:", verdict.steering);
-  console.error("Anchors:", verdict.statutoryAnchors);
-  console.error("Receipt verified (Ed25519):", verdict.receiptVerified);
-} else {
-  console.log("ALLOWED — proceeding.");
+if (!verdict.allowed || !verdict.receiptVerified) {
+  throw new Error(verdict.steering ?? verdict.receiptReason ?? "Evaluation failed");
+}
+
+console.log(candidate); // Your application controls release.
+```
+
+At least one `bundleIds` or `policyIds` entry is required. The passive method
+does not call an LLM or retry automatically; orchestration remains entirely in
+your application.
+
+### Active Self-Correcting Cascade (Zero-Configuration Orchestration)
+
+Use `generateGoverned` or `generateGovernedStream` when you want one SDK call
+to invoke the governed endpoint for LLM generation, strict semantic evaluation,
+and a bounded healing retry. Under the governed endpoint protocol, if the first
+candidate is semantically blocked and `maxRetries` is `1`, the backend may build
+one constrained healing prompt from policy recovery instructions and generate
+one more candidate. The protocol releases an allowed completion or returns a
+structured denial; the examples below also recheck `evaluation.allowed` before
+using content as a defense-in-depth invariant.
+
+```mermaid
+sequenceDiagram
+    actor Client
+    participant Ramen as ramen ai governed endpoint
+    participant LLM as Selected LLM provider
+    participant Firewall as Semantic firewall
+
+    Client->>Ramen: Prompt, policy scope, and BYOK credentials
+    loop Initial generation plus at most one healing retry
+        Ramen->>LLM: Generate candidate
+        LLM-->>Ramen: Candidate output
+        Ramen->>Firewall: Evaluate candidate against policies
+        Firewall-->>Ramen: Verdict and recovery instructions
+        alt Candidate allowed
+            Ramen-->>Client: Governance-approved completion
+        else Candidate blocked and retry remains
+            Ramen->>Ramen: Build bounded healing prompt
+        else Candidate blocked after final attempt
+            Ramen-->>Client: GovernanceDeniedException
+        end
+    end
+```
+
+#### Non-streaming governed generation
+
+Node BYOK credentials are constructor options. Setting `providerKey` explicitly
+funds generation on Starter and Professional tiers; the client forwards it on
+every governed request as `X-Provider-Key`.
+
+```ts
+import {
+  GovernanceDeniedException,
+  GovernedGenerationException,
+  RamenClient,
+} from "@ramen-ai/node-core";
+
+const governed = new RamenClient({
+  apiKey: process.env.RAMEN_API_KEY!,
+  providerKey: process.env.OPENAI_API_KEY!, // required for Starter/Professional
+  providerName: "openai",                  // use "google" for Gemini keys
+});
+
+try {
+  const result = await governed.generateGoverned(
+    "Draft a customer response explaining the available options.",
+    {
+      bundleIds: ["ramen__eu_ai_act_baseline"],
+      maxRetries: 1, // one additional generation attempt at most
+      generation: { temperature: 0.2, maxTokens: 1024 },
+    },
+  );
+
+  if (!result.evaluation.allowed) {
+    throw new Error("Unexpected non-allowed governed completion");
+  }
+  console.log(result.content);
+  console.log("Attempts:", result.attempts);
+  if (result.evaluation.receipt_id) {
+    console.log("Audit receipt ID:", result.evaluation.receipt_id);
+  }
+} catch (error) {
+  if (error instanceof GovernanceDeniedException) {
+    console.error("No generated candidate passed governance", error.data.evaluation);
+  } else if (error instanceof GovernedGenerationException) {
+    console.error(error.status, error.code, error.message);
+  } else {
+    throw error; // local argument or configuration error
+  }
 }
 ```
+
+#### Streaming governed generation
+
+The stream yields `status`, `heartbeat`, and one successful `complete` event.
+Candidate tokens are not streamed before evaluation. Terminal `blocked` and
+`error` SSE messages are raised as exceptions rather than yielded as events.
+
+```ts
+try {
+  for await (const event of governed.generateGovernedStream(
+    "Draft a customer response explaining the available options.",
+    {
+      bundleIds: ["ramen__eu_ai_act_baseline"],
+      maxRetries: 1,
+      generation: { temperature: 0.2, maxTokens: 1024 },
+    },
+  )) {
+    if (event.event === "status") {
+      console.log(event.data.stage, event.data.attempt);
+    } else if (event.event === "complete") {
+      if (!event.data.data.evaluation.allowed) {
+        throw new Error("Unexpected non-allowed governed completion");
+      }
+      console.log(event.data.data.content);
+    }
+  }
+} catch (error) {
+  if (error instanceof GovernanceDeniedException) {
+    console.error("Blocked after all governed attempts", error.data);
+  } else if (error instanceof GovernedGenerationException) {
+    console.error(error.code, error.message);
+  } else {
+    throw error;
+  }
+}
+```
+
+`maxRetries` defaults to `1` and accepts only `0` or `1`; it counts additional
+generations, so at most two candidates are generated. The clients do not replay
+transport failures. Governed completion means the server reported strict policy
+approval; it is not a claim of factual correctness or legal compliance.
+
+#### Governed-generation method signatures
+
+```ts
+client.generateGoverned(
+  prompt: string,
+  options: {
+    bundleIds?: readonly string[];
+    policyIds?: readonly string[];
+    maxRetries?: 0 | 1;
+    generation?: { temperature?: number; maxTokens?: number };
+  },
+): Promise<GovernedCompleteData>;
+
+client.generateGovernedStream(
+  prompt: string,
+  options: GenerateGovernedOptions,
+): AsyncGenerator<GovernedStreamEvent>;
+```
+
+The prompt must be non-blank and at most 10,000 characters. At least one bundle
+or policy is required. `temperature` must be between `0` and `2`, and
+`maxTokens` must be an integer between `1` and `4096`.
 
 ---
 
 ## Bring Your Own Key (BYOK)
 
-The **Starter** and **Professional** tiers are BYOK. The ramen-ai backend
-runs LLM inference using your own provider key rather than a platform-managed
-key, keeping inference costs transparent and under your control.
+The **Starter** and **Professional** tiers are BYOK. The ramen-ai backend runs
+LLM inference using your provider key rather than a platform-managed key,
+keeping generation costs transparent and under your control.
 
 You need two keys:
 
@@ -81,25 +262,26 @@ You need two keys:
 
 ```bash
 export RAMEN_API_KEY=ramen_ak_...
-export OPENAI_API_KEY=sk-...        # or ANTHROPIC_API_KEY, etc.
+export OPENAI_API_KEY=sk-...        # or ANTHROPIC_API_KEY, GEMINI_API_KEY, etc.
 ```
 
-Pass both when constructing the client:
+Pass both when constructing the Node client. The provider configuration applies
+to `evaluateCompliance`, `generateGoverned`, and `generateGovernedStream`:
 
 ```ts
 const client = new RamenClient({
   apiKey: process.env.RAMEN_API_KEY!,
-  providerKey: process.env.OPENAI_API_KEY,   // forwarded as X-Provider-Key
-  providerName: "openai",                    // optional — defaults to "openai"
+  providerKey: process.env.OPENAI_API_KEY!, // forwarded as X-Provider-Key
+  providerName: "openai",                  // optional; defaults to "openai"
 });
 ```
 
 **Supported provider names:** `"openai"` (default) | `"anthropic"` |
 `"google"` | `"synthetic"` | `"hyperbolic"`.
 
-**Enterprise tier** users have keys managed server-side — omit `providerKey`
-and `providerName` entirely. Without `providerKey`, the API returns
-`402 Payment Required` on Starter/Professional tiers.
+**Enterprise tier** users have keys managed server-side—omit `providerKey` and
+`providerName`. Without `providerKey`, the API returns `402 Payment Required`
+on Starter and Professional tiers.
 
 ---
 
