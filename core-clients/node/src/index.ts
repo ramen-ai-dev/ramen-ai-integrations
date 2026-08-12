@@ -13,6 +13,27 @@
 export { RamenClient } from "./client.js";
 export type { RamenClientOptions, EvaluateOptions } from "./client.js";
 
+export {
+  GovernanceDeniedException,
+  GovernedGenerationException,
+} from "./governed-errors.js";
+export type {
+  GenerateGovernedOptions,
+  GovernedAccounting,
+  GovernedAttemptMetadata,
+  GovernedBlockedData,
+  GovernedCompleteData,
+  GovernedCompleteEvent,
+  GovernedEvaluationSummary,
+  GovernedGenerationOptions,
+  GovernedHeartbeatEvent,
+  GovernedProviderName,
+  GovernedStatusEvent,
+  GovernedStatusStage,
+  GovernedStreamEvent,
+  GovernedTokenUsage,
+} from "./governed-types.js";
+
 export { verifyReceipt, sha256Hex, AUDIT_PUBLIC_KEYS } from "./verifier.js";
 
 export type {

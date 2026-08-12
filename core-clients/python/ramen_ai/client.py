@@ -20,10 +20,21 @@ every response that carries a V5 receipt and surfaces the result.
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Iterator, Sequence
+from typing import Any, Literal
 
 import httpx
 
+from .governed import (
+    generate_governed as _generate_governed,
+    generate_governed_stream as _generate_governed_stream,
+)
+from .governed_types import (
+    GovernedCompleteData,
+    GovernedGenerationOptions,
+    GovernedProviderName,
+    GovernedStreamEvent,
+)
 from .verifier import verify_receipt
 
 _EVALUATE_PATH = "/api/v1/paas/evaluate"
@@ -229,6 +240,52 @@ class RamenClient:
             "policy_ids": resolved_policy_ids,
             "data": data,
         }
+
+    def generate_governed(
+        self,
+        prompt: str,
+        *,
+        policy_ids: Sequence[str] | None = None,
+        bundle_ids: Sequence[str] | None = None,
+        max_retries: Literal[0, 1] = 1,
+        generation: GovernedGenerationOptions | None = None,
+        provider_key: str | None = None,
+        provider_name: GovernedProviderName | None = None,
+    ) -> GovernedCompleteData:
+        """Generate content and return it only after strict governance approval."""
+        return _generate_governed(
+            self._http,
+            prompt,
+            policy_ids=policy_ids,
+            bundle_ids=bundle_ids,
+            max_retries=max_retries,
+            generation=generation,
+            provider_key=provider_key,
+            provider_name=provider_name,
+        )
+
+    def generate_governed_stream(
+        self,
+        prompt: str,
+        *,
+        policy_ids: Sequence[str] | None = None,
+        bundle_ids: Sequence[str] | None = None,
+        max_retries: Literal[0, 1] = 1,
+        generation: GovernedGenerationOptions | None = None,
+        provider_key: str | None = None,
+        provider_name: GovernedProviderName | None = None,
+    ) -> Iterator[GovernedStreamEvent]:
+        """Stream governed progress and the successful terminal event."""
+        return _generate_governed_stream(
+            self._http,
+            prompt,
+            policy_ids=policy_ids,
+            bundle_ids=bundle_ids,
+            max_retries=max_retries,
+            generation=generation,
+            provider_key=provider_key,
+            provider_name=provider_name,
+        )
 
     # ---------------------------------------------------------------------- #
     # Context-manager support                                                  #

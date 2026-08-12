@@ -11,6 +11,15 @@ import type {
   EvaluationResponse,
   RamenReceipt,
 } from "./types.js";
+import {
+  generateGoverned as executeGoverned,
+  generateGovernedStream as streamGoverned,
+} from "./governed.js";
+import type {
+  GenerateGovernedOptions,
+  GovernedCompleteData,
+  GovernedStreamEvent,
+} from "./governed-types.js";
 import { verifyReceipt, AUDIT_PUBLIC_KEYS } from "./verifier.js";
 
 const DEFAULT_BASE_URL = "https://api.ramenai.dev";
@@ -135,6 +144,42 @@ export class RamenClient {
     if (!data) throw new Error("evaluate response missing data envelope");
 
     return this.normalize(data, input);
+  }
+
+  /** Generate content and return it only after strict governance approval. */
+  async generateGoverned(
+    prompt: string,
+    options: GenerateGovernedOptions,
+  ): Promise<GovernedCompleteData> {
+    return executeGoverned(
+      {
+        apiKey: this.apiKey,
+        baseUrl: this.baseUrl,
+        providerKey: this.providerKey,
+        providerName: this.providerName,
+        fetchImpl: this.fetchImpl,
+      },
+      prompt,
+      options,
+    );
+  }
+
+  /** Stream governed progress and the successful terminal event. */
+  generateGovernedStream(
+    prompt: string,
+    options: GenerateGovernedOptions,
+  ): AsyncGenerator<GovernedStreamEvent> {
+    return streamGoverned(
+      {
+        apiKey: this.apiKey,
+        baseUrl: this.baseUrl,
+        providerKey: this.providerKey,
+        providerName: this.providerName,
+        fetchImpl: this.fetchImpl,
+      },
+      prompt,
+      options,
+    );
   }
 
   /** Verify the receipt (if present) and shape the normalized verdict. */
