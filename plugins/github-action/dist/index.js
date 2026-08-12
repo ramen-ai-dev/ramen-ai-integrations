@@ -1928,7 +1928,11 @@ var require_request = __commonJS({
           } else if (typeof val[i] === "object") {
             throw new InvalidArgumentError(`invalid ${key} header`);
           } else {
-            arr.push(`${val[i]}`);
+            const str = `${val[i]}`;
+            if (!isValidHeaderValue(str)) {
+              throw new InvalidArgumentError(`invalid ${key} header`);
+            }
+            arr.push(str);
           }
         }
         val = arr;
@@ -1940,6 +1944,9 @@ var require_request = __commonJS({
         val = "";
       } else {
         val = `${val}`;
+        if (!isValidHeaderValue(val)) {
+          throw new InvalidArgumentError(`invalid ${key} header`);
+        }
       }
       if (headerName === "host") {
         if (request2.host !== null) {
@@ -5670,6 +5677,7 @@ var require_client_h1 = __commonJS({
       RequestContentLengthMismatchError,
       ResponseContentLengthMismatchError,
       RequestAbortedError,
+      InvalidArgumentError,
       HeadersTimeoutError,
       HeadersOverflowError,
       SocketError,
@@ -6396,8 +6404,16 @@ var require_client_h1 = __commonJS({
         }
         body = bodyStream.stream;
         contentLength = bodyStream.length;
-      } else if (util.isBlobLike(body) && request2.contentType == null && body.type) {
-        headers.push("content-type", body.type);
+      } else if (util.isBlobLike(body) && request2.contentType == null) {
+        const contentType = body.type;
+        if (contentType) {
+          const contentTypeValue = `${contentType}`;
+          if (!util.isValidHeaderValue(contentTypeValue)) {
+            util.errorRequest(client, request2, new InvalidArgumentError("invalid content-type header"));
+            return false;
+          }
+          headers.push("content-type", contentTypeValue);
+        }
       }
       if (body && typeof body.read === "function") {
         body.read(0);
@@ -8740,7 +8756,7 @@ var require_proxy_agent = __commonJS({
         });
       }
       dispatch(opts, handler2) {
-        const headers = buildHeaders(opts.headers);
+        const headers = buildHeaders2(opts.headers);
         throwIfProxyAuthIsSent(headers);
         if (headers && !("host" in headers) && !("Host" in headers)) {
           const { host } = new URL2(opts.origin);
@@ -8776,7 +8792,7 @@ var require_proxy_agent = __commonJS({
         await this[kClient].destroy();
       }
     };
-    function buildHeaders(headers) {
+    function buildHeaders2(headers) {
       if (Array.isArray(headers)) {
         const headersPair = {};
         for (let i = 0; i < headers.length; i += 2) {
@@ -8948,6 +8964,24 @@ var require_retry_handler = __commonJS({
     function calculateRetryAfterHeader(retryAfter) {
       const current = Date.now();
       return new Date(retryAfter).getTime() - current;
+    }
+    function validatePartialResponseContentLength(headers, range, statusCode, retryCount) {
+      const contentLength = headers["content-length"];
+      if (contentLength == null) {
+        return null;
+      }
+      if (!Number.isFinite(range.start) || !Number.isFinite(range.end)) {
+        return null;
+      }
+      const length = Number(contentLength);
+      const expectedLength = range.end - range.start + 1;
+      if (!Number.isFinite(length) || length !== expectedLength) {
+        return new RequestRetryError("Content-Length mismatch", statusCode, {
+          headers,
+          data: { count: retryCount }
+        });
+      }
+      return null;
     }
     var RetryHandler = class _RetryHandler {
       constructor(opts, handlers) {
@@ -9121,6 +9155,11 @@ var require_retry_handler = __commonJS({
             );
             return false;
           }
+          const contentLengthError = validatePartialResponseContentLength(headers, contentRange, statusCode, this.retryCount);
+          if (contentLengthError != null) {
+            this.abort(contentLengthError);
+            return false;
+          }
           const { start, size, end = size - 1 } = contentRange;
           assert(this.start === start, "content-range mismatch");
           assert(this.end == null || this.end === end, "content-range mismatch");
@@ -9137,6 +9176,11 @@ var require_retry_handler = __commonJS({
                 resume,
                 statusMessage
               );
+            }
+            const contentLengthError = validatePartialResponseContentLength(headers, range, statusCode, this.retryCount);
+            if (contentLengthError != null) {
+              this.abort(contentLengthError);
+              return false;
             }
             const { start, size, end = size - 1 } = range;
             assert(
@@ -15983,14 +16027,48 @@ var require_util6 = __commonJS({
       for (let i = 0; i < path.length; ++i) {
         const code = path.charCodeAt(i);
         if (code < 32 || // exclude CTLs (0-31)
-        code === 127 || // DEL
+        code > 126 || // exclude DEL and non-ascii
         code === 59) {
           throw new Error("Invalid cookie path");
         }
       }
     }
+    function isLetterOrDigit(code) {
+      return code >= 48 && code <= 57 || // 0-9
+      code >= 65 && code <= 90 || // A-Z
+      code >= 97 && code <= 122;
+    }
     function validateCookieDomain(domain) {
-      if (domain.startsWith("-") || domain.endsWith(".") || domain.endsWith("-")) {
+      if (domain === " ") {
+        return;
+      }
+      if (domain.length > 255) {
+        throw new Error("Invalid cookie domain");
+      }
+      let labelLength = 0;
+      for (let i = 0; i < domain.length; ++i) {
+        const code = domain.charCodeAt(i);
+        if (code === 46) {
+          if (labelLength === 0) {
+            throw new Error("Invalid cookie domain");
+          }
+          if (domain.charCodeAt(i - 1) === 45) {
+            throw new Error("Invalid cookie domain");
+          }
+          labelLength = 0;
+          continue;
+        }
+        if (labelLength === 0 && !isLetterOrDigit(code)) {
+          throw new Error("Invalid cookie domain");
+        }
+        if (!isLetterOrDigit(code) && code !== 45) {
+          throw new Error("Invalid cookie domain");
+        }
+        if (++labelLength > 63) {
+          throw new Error("Invalid cookie domain");
+        }
+      }
+      if (labelLength === 0 || domain.charCodeAt(domain.length - 1) === 45) {
         throw new Error("Invalid cookie domain");
       }
     }
@@ -16073,7 +16151,11 @@ var require_util6 = __commonJS({
           throw new Error("Invalid unparsed");
         }
         const [key, ...value] = part.split("=");
-        out.push(`${key.trim()}=${value.join("=")}`);
+        const trimmedKey = key.trim();
+        const joinedValue = value.join("=");
+        validateCookieName(trimmedKey);
+        validateCookieValue(joinedValue);
+        out.push(`${trimmedKey}=${joinedValue}`);
       }
       return out.join("; ");
     }
@@ -24132,6 +24214,420 @@ function getOctokit(token, options, ...additionalPlugins) {
   return new GitHubWithPlugins(getOctokitOptions(token, options));
 }
 
+// ../../core-clients/node/dist/governed-errors.js
+var GovernedGenerationException = class extends Error {
+  status;
+  code;
+  details;
+  constructor(status, code, message, details) {
+    super(message);
+    this.status = status;
+    this.code = code;
+    this.details = details;
+    this.name = "GovernedGenerationException";
+  }
+};
+var GovernanceDeniedException = class extends GovernedGenerationException {
+  data;
+  status = 422;
+  code = "GOVERNED_OUTPUT_BLOCKED";
+  constructor(message, data) {
+    super(422, "GOVERNED_OUTPUT_BLOCKED", message, data);
+    this.data = data;
+    this.name = "GovernanceDeniedException";
+  }
+};
+
+// ../../core-clients/node/dist/governed.js
+var GOVERNED_PATH = "/api/v1/generate/governed";
+var GOVERNED_TIMEOUT_MS = 6e4;
+var STATUS_STAGES = /* @__PURE__ */ new Set([
+  "accepted",
+  "generating",
+  "evaluating",
+  "regenerating"
+]);
+async function generateGoverned(config, prompt, options) {
+  const body = buildBody(prompt, options);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), GOVERNED_TIMEOUT_MS);
+  try {
+    const response = await config.fetchImpl(`${config.baseUrl}${GOVERNED_PATH}`, {
+      method: "POST",
+      headers: buildHeaders(config, "application/json"),
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    const payload = await decodeJson(response);
+    if (!response.ok || payload.success !== true) {
+      throwApiError(response.status, payload);
+    }
+    return parseCompleteData(payload.data, response.status);
+  } catch (error2) {
+    if (error2 instanceof GovernedGenerationException)
+      throw error2;
+    if (controller.signal.aborted) {
+      throw new GovernedGenerationException(null, "TRANSPORT_TIMEOUT", "Governed generation timed out");
+    }
+    throw new GovernedGenerationException(null, "TRANSPORT_ERROR", "Governed generation request failed", error2);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function* generateGovernedStream(config, prompt, options) {
+  const body = buildBody(prompt, options);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), GOVERNED_TIMEOUT_MS);
+  let reader;
+  let terminalSeen = false;
+  try {
+    const response = await config.fetchImpl(`${config.baseUrl}${GOVERNED_PATH}`, {
+      method: "POST",
+      headers: buildHeaders(config, "text/event-stream"),
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    if (!response.ok) {
+      const payload = await decodeJson(response);
+      throwApiError(response.status, payload);
+    }
+    const contentType = response.headers.get("Content-Type")?.toLowerCase() ?? "";
+    if (!contentType.startsWith("text/event-stream") || !response.body) {
+      throw new GovernedGenerationException(response.status, "STREAM_PROTOCOL_ERROR", "Governed generation did not return an SSE stream");
+    }
+    reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    const parseFrames = (flush) => {
+      const frames = [];
+      const delimiter = /\r\n\r\n|\r\r|\n\n/g;
+      let frameStart = 0;
+      let match;
+      while ((match = delimiter.exec(buffer)) !== null) {
+        frames.push(buffer.slice(frameStart, match.index));
+        frameStart = match.index + match[0].length;
+      }
+      buffer = buffer.slice(frameStart);
+      if (flush && buffer.length > 0) {
+        frames.push(buffer);
+        buffer = "";
+      }
+      const events = [];
+      for (const frame of frames) {
+        const event = parseSseFrame(frame, response.status);
+        if (event)
+          events.push(event);
+      }
+      return events;
+    };
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        buffer += decoder.decode();
+        if (buffer.length > 0)
+          buffer += "\n\n";
+      } else {
+        buffer += decoder.decode(value, { stream: true });
+      }
+      for (const event of parseFrames(done)) {
+        if (event.event === "complete")
+          terminalSeen = true;
+        yield event;
+        if (event.event === "complete")
+          return;
+      }
+      if (done)
+        break;
+    }
+    throw new GovernedGenerationException(response.status, "STREAM_TERMINATED", "Governed generation stream ended without a terminal event");
+  } catch (error2) {
+    if (error2 instanceof GovernedGenerationException)
+      throw error2;
+    if (controller.signal.aborted) {
+      throw new GovernedGenerationException(null, "TRANSPORT_TIMEOUT", "Governed generation stream timed out");
+    }
+    throw new GovernedGenerationException(null, "TRANSPORT_ERROR", "Governed generation stream failed", error2);
+  } finally {
+    clearTimeout(timer);
+    if (reader) {
+      if (!terminalSeen)
+        await reader.cancel();
+      reader.releaseLock();
+    }
+  }
+}
+function buildBody(prompt, options) {
+  if (typeof prompt !== "string" || !prompt.trim() || prompt.length > 1e4) {
+    throw new Error("prompt must be a non-blank string of at most 10,000 characters");
+  }
+  if (!options.policyIds?.length && !options.bundleIds?.length) {
+    throw new Error("Provide at least one of bundleIds or policyIds");
+  }
+  const maxRetries = options.maxRetries ?? 1;
+  if (maxRetries !== 0 && maxRetries !== 1) {
+    throw new Error("maxRetries must be 0 or 1");
+  }
+  const body = { prompt, max_retries: maxRetries };
+  if (options.policyIds?.length)
+    body.policy_ids = [...options.policyIds];
+  if (options.bundleIds?.length)
+    body.bundle_ids = [...options.bundleIds];
+  if (options.generation) {
+    const { temperature, maxTokens } = options.generation;
+    if (temperature !== void 0 && (!Number.isFinite(temperature) || temperature < 0 || temperature > 2)) {
+      throw new Error("generation.temperature must be between 0 and 2");
+    }
+    if (maxTokens !== void 0 && (!Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > 4096)) {
+      throw new Error("generation.maxTokens must be an integer between 1 and 4096");
+    }
+    body.generation = {
+      ...temperature !== void 0 ? { temperature } : {},
+      ...maxTokens !== void 0 ? { max_tokens: maxTokens } : {}
+    };
+  }
+  return body;
+}
+function buildHeaders(config, accept) {
+  const headers = {
+    Authorization: `Bearer ${config.apiKey}`,
+    Accept: accept,
+    "Content-Type": "application/json"
+  };
+  if (config.providerKey) {
+    headers["X-Provider-Key"] = config.providerKey;
+    if (config.providerName)
+      headers["X-Provider"] = config.providerName;
+  }
+  return headers;
+}
+async function decodeJson(response) {
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (error2) {
+    throw new GovernedGenerationException(response.status, "PARSE_ERROR", "Failed to parse governed generation response", error2);
+  }
+  if (!isRecord(payload)) {
+    throw new GovernedGenerationException(response.status, "PARSE_ERROR", "Governed generation response must be a JSON object");
+  }
+  return payload;
+}
+function throwApiError(status, payload) {
+  const error2 = isRecord(payload.error) ? payload.error : {};
+  const code = typeof error2.code === "string" ? error2.code : "UNKNOWN_ERROR";
+  const message = typeof error2.message === "string" ? error2.message : `Governed generation failed with HTTP ${status}`;
+  const details = error2.details ?? payload.data;
+  if (status === 422 && code === "GOVERNED_OUTPUT_BLOCKED") {
+    throw new GovernanceDeniedException(message, parseBlockedData(payload.data, status));
+  }
+  throw new GovernedGenerationException(status, code, message, details);
+}
+function parseSseFrame(frame, status) {
+  let eventName;
+  const dataLines = [];
+  for (const line of frame.split(/\r\n|\r|\n/)) {
+    if (line.startsWith(":"))
+      continue;
+    const colon = line.indexOf(":");
+    const field = colon === -1 ? line : line.slice(0, colon);
+    let value = colon === -1 ? "" : line.slice(colon + 1);
+    if (value.startsWith(" "))
+      value = value.slice(1);
+    if (field === "event")
+      eventName = value;
+    if (field === "data")
+      dataLines.push(value);
+  }
+  if (!eventName || !["status", "heartbeat", "complete", "blocked", "error"].includes(eventName)) {
+    return null;
+  }
+  if (!dataLines.length) {
+    throw new GovernedGenerationException(status, "STREAM_PARSE_ERROR", `SSE event ${eventName} has no data`);
+  }
+  let payload;
+  try {
+    payload = JSON.parse(dataLines.join("\n"));
+  } catch (error2) {
+    throw new GovernedGenerationException(status, "STREAM_PARSE_ERROR", `Failed to parse governed generation SSE event: ${eventName}`, error2);
+  }
+  if (!isRecord(payload)) {
+    throw new GovernedGenerationException(status, "STREAM_PARSE_ERROR", `Governed generation SSE event ${eventName} must contain an object`);
+  }
+  try {
+    if (eventName === "status") {
+      const stage = stringField(payload, "stage");
+      if (!STATUS_STAGES.has(stage)) {
+        throw new TypeError("Invalid governed status stage");
+      }
+      const event = {
+        event: "status",
+        data: {
+          stage,
+          attempt: integerField(payload, "attempt"),
+          ...payload.violations !== void 0 ? { violations: integerValue(payload.violations, "violations") } : {}
+        }
+      };
+      return event;
+    }
+    if (eventName === "heartbeat") {
+      const event = {
+        event: "heartbeat",
+        data: { timestamp: stringField(payload, "timestamp") }
+      };
+      return event;
+    }
+    if (eventName === "complete") {
+      if (payload.success !== true)
+        throw new TypeError("Invalid complete event");
+      const event = {
+        event: "complete",
+        data: { success: true, data: parseCompleteData(payload.data, status) }
+      };
+      return event;
+    }
+    const error2 = recordField(payload, "error");
+    const code = stringField(error2, "code");
+    const message = stringField(error2, "message");
+    const logicalStatus = integerField(error2, "http_status");
+    if (eventName === "blocked") {
+      if (code !== "GOVERNED_OUTPUT_BLOCKED" || logicalStatus !== 422) {
+        throw new TypeError("Invalid blocked terminal event");
+      }
+      throw new GovernanceDeniedException(message, parseBlockedData(payload.data, logicalStatus));
+    }
+    throw new GovernedGenerationException(logicalStatus, code, message, payload.data);
+  } catch (error2) {
+    if (error2 instanceof GovernedGenerationException)
+      throw error2;
+    throw new GovernedGenerationException(status, "STREAM_PARSE_ERROR", `Invalid governed generation SSE event: ${eventName}`, error2);
+  }
+}
+function parseCompleteData(value, status) {
+  try {
+    const data = recordValue(value, "data");
+    return {
+      content: stringField(data, "content"),
+      provider: stringField(data, "provider"),
+      model: stringField(data, "model"),
+      ...data.usage !== void 0 ? { usage: parseUsage(data.usage) } : {},
+      attempts: integerField(data, "attempts"),
+      attempt_metadata: parseAttempts(data.attempt_metadata),
+      evaluation: parseEvaluation(data.evaluation),
+      accounting: parseAccounting(data.accounting),
+      total_duration_ms: integerField(data, "total_duration_ms")
+    };
+  } catch (error2) {
+    if (error2 instanceof GovernedGenerationException)
+      throw error2;
+    throw new GovernedGenerationException(status, "PARSE_ERROR", "Invalid governed generation completion payload", error2);
+  }
+}
+function parseBlockedData(value, status) {
+  try {
+    const data = recordValue(value, "data");
+    return {
+      attempts: integerField(data, "attempts"),
+      attempt_metadata: parseAttempts(data.attempt_metadata),
+      evaluation: parseEvaluation(data.evaluation),
+      accounting: parseAccounting(data.accounting),
+      total_duration_ms: integerField(data, "total_duration_ms")
+    };
+  } catch (error2) {
+    if (error2 instanceof GovernedGenerationException)
+      throw error2;
+    throw new GovernedGenerationException(status, "PARSE_ERROR", "Invalid governed generation blocked payload", error2);
+  }
+}
+function parseUsage(value) {
+  const usage = recordValue(value, "usage");
+  return {
+    prompt_tokens: integerField(usage, "prompt_tokens"),
+    completion_tokens: integerField(usage, "completion_tokens"),
+    total_tokens: integerField(usage, "total_tokens")
+  };
+}
+function parseAttempts(value) {
+  if (!Array.isArray(value))
+    throw new TypeError("attempt_metadata must be an array");
+  return value.map((item) => {
+    const attempt = recordValue(item, "attempt_metadata item");
+    return {
+      attempt: integerField(attempt, "attempt"),
+      provider: stringField(attempt, "provider"),
+      model: stringField(attempt, "model"),
+      generation_duration_ms: integerField(attempt, "generation_duration_ms"),
+      evaluation_duration_ms: integerField(attempt, "evaluation_duration_ms"),
+      policies_evaluated: integerField(attempt, "policies_evaluated"),
+      allowed: booleanField(attempt, "allowed"),
+      ...attempt.usage !== void 0 ? { usage: parseUsage(attempt.usage) } : {}
+    };
+  });
+}
+function parseAccounting(value) {
+  const accounting = recordValue(value, "accounting");
+  return {
+    generation_attempts: integerField(accounting, "generation_attempts"),
+    evaluation_batches: integerField(accounting, "evaluation_batches"),
+    policy_evaluations: integerField(accounting, "policy_evaluations")
+  };
+}
+function parseEvaluation(value) {
+  const evaluation = recordValue(value, "evaluation");
+  const receiptId = evaluation.receipt_id;
+  if (receiptId !== void 0 && typeof receiptId !== "string") {
+    throw new TypeError("receipt_id must be a string");
+  }
+  return {
+    allowed: booleanField(evaluation, "allowed"),
+    policy_ids: stringArrayField(evaluation, "policy_ids"),
+    policies_evaluated: integerField(evaluation, "policies_evaluated"),
+    policies_passed: integerField(evaluation, "policies_passed"),
+    policies_failed: integerField(evaluation, "policies_failed"),
+    policies_errored: integerField(evaluation, "policies_errored"),
+    violation_count: integerField(evaluation, "violation_count"),
+    statutory_anchors: stringArrayField(evaluation, "statutory_anchors"),
+    ...receiptId !== void 0 ? { receipt_id: receiptId } : {}
+  };
+}
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function recordValue(value, name) {
+  if (!isRecord(value))
+    throw new TypeError(`${name} must be an object`);
+  return value;
+}
+function recordField(record, key) {
+  return recordValue(record[key], key);
+}
+function stringField(record, key) {
+  const value = record[key];
+  if (typeof value !== "string")
+    throw new TypeError(`${key} must be a string`);
+  return value;
+}
+function integerValue(value, name) {
+  if (!Number.isInteger(value))
+    throw new TypeError(`${name} must be an integer`);
+  return value;
+}
+function integerField(record, key) {
+  return integerValue(record[key], key);
+}
+function booleanField(record, key) {
+  const value = record[key];
+  if (typeof value !== "boolean")
+    throw new TypeError(`${key} must be a boolean`);
+  return value;
+}
+function stringArrayField(record, key) {
+  const value = record[key];
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new TypeError(`${key} must be an array of strings`);
+  }
+  return value;
+}
+
 // ../../core-clients/node/dist/verifier.js
 var AUDIT_PUBLIC_KEYS = {
   ramen_pk_v1: "MCowBQYDK2VwAyEA8iTL9lJGYn2alGn1yMWVAIqLImTpADb9CqaLhisTuto="
@@ -24254,6 +24750,26 @@ var RamenClient = class {
     if (!data)
       throw new Error("evaluate response missing data envelope");
     return this.normalize(data, input);
+  }
+  /** Generate content and return it only after strict governance approval. */
+  async generateGoverned(prompt, options) {
+    return generateGoverned({
+      apiKey: this.apiKey,
+      baseUrl: this.baseUrl,
+      providerKey: this.providerKey,
+      providerName: this.providerName,
+      fetchImpl: this.fetchImpl
+    }, prompt, options);
+  }
+  /** Stream governed progress and the successful terminal event. */
+  generateGovernedStream(prompt, options) {
+    return generateGovernedStream({
+      apiKey: this.apiKey,
+      baseUrl: this.baseUrl,
+      providerKey: this.providerKey,
+      providerName: this.providerName,
+      fetchImpl: this.fetchImpl
+    }, prompt, options);
   }
   /** Verify the receipt (if present) and shape the normalized verdict. */
   async normalize(data, input) {
