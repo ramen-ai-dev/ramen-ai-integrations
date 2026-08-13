@@ -53,8 +53,8 @@ export function ComparisonCards({ scenario, swapped, onSwap }: { scenario: DemoS
         <EntityCard entity={second} position="Right pane" />
       </div>
       <div className="decision-request">
-        <span>Decision request</span>
-        <p>{scenario.decisionRequest}</p>
+        <span>Adversarial prompt</span>
+        <p>{scenario.adversarialPrompt}</p>
       </div>
     </section>
   );

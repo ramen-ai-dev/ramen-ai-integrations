@@ -7,55 +7,28 @@ export const attributeSchema = z.object({
   label: boundedText(80),
   value: boundedText(300),
   category: z.enum(["relevant", "proxy"]),
-});
+}).strict();
 
 export const comparisonEntitySchema = z.object({
   id: identifierSchema,
   label: boundedText(80),
   score: z.number().int().min(0).max(100),
   attributes: z.array(attributeSchema).min(1).max(12),
-});
+}).strict();
 
-export const scenarioSchema = z
-  .object({
-    id: identifierSchema,
-    title: boundedText(100),
-    summary: boundedText(280),
-    context: boundedText(120),
-    expectedPath: z.enum(["pass", "heal", "block"]),
-    entities: z.tuple([comparisonEntitySchema, comparisonEntitySchema]),
-    decisionRequest: boundedText(500),
-    guided: z.object({
-      rejectedContent: boundedText(2_000).optional(),
-      approvedContent: boundedText(2_000).optional(),
-      rejectedEntityId: identifierSchema.optional(),
-      approvedEntityId: identifierSchema.optional(),
-      steeringRationale: z.array(boundedText(300)).max(8),
-    }),
-  })
-  .superRefine((scenario, context) => {
-    const entityIds = new Set(scenario.entities.map((entity) => entity.id));
-    if (scenario.guided.rejectedEntityId && !entityIds.has(scenario.guided.rejectedEntityId)) {
-      context.addIssue({ code: z.ZodIssueCode.custom, path: ["guided", "rejectedEntityId"], message: "Rejected entity must exist in entities" });
-    }
-    if (scenario.guided.approvedEntityId && !entityIds.has(scenario.guided.approvedEntityId)) {
-      context.addIssue({ code: z.ZodIssueCode.custom, path: ["guided", "approvedEntityId"], message: "Approved entity must exist in entities" });
-    }
-    if (scenario.expectedPath === "pass" && !scenario.guided.approvedContent) {
-      context.addIssue({ code: z.ZodIssueCode.custom, path: ["guided", "approvedContent"], message: "Pass scenarios require approved content" });
-    }
-    if (scenario.expectedPath === "heal" && (!scenario.guided.rejectedContent || !scenario.guided.approvedContent)) {
-      context.addIssue({ code: z.ZodIssueCode.custom, path: ["guided"], message: "Heal scenarios require rejected and approved content" });
-    }
-    if (scenario.expectedPath === "block" && !scenario.guided.rejectedContent) {
-      context.addIssue({ code: z.ZodIssueCode.custom, path: ["guided", "rejectedContent"], message: "Block scenarios require rejected content" });
-    }
-  });
+export const scenarioSchema = z.object({
+  id: identifierSchema,
+  title: boundedText(100),
+  summary: boundedText(280),
+  context: boundedText(120),
+  entities: z.tuple([comparisonEntitySchema, comparisonEntitySchema]),
+  adversarialPrompt: boundedText(500),
+}).strict();
 
 export const scenarioCatalogSchema = z.object({
   schemaVersion: z.literal(1),
-  scenarios: z.array(scenarioSchema).min(1).max(50),
-});
+  scenarios: z.array(scenarioSchema).length(5),
+}).strict();
 
 export const demoConfigSchema = z.object({
   schemaVersion: z.literal(1),
@@ -85,7 +58,6 @@ export const demoConfigSchema = z.object({
   governance: z.object({
     policyIds: z.array(z.string().uuid()).min(1).max(20),
     maxRetries: z.union([z.literal(0), z.literal(1)]),
-    exposeHealingTrail: z.boolean(),
     generation: z.object({
       temperature: z.number().min(0).max(2),
       maxTokens: z.number().int().min(1).max(4096),
@@ -188,7 +160,7 @@ export interface DpoRecord {
   chosen: string;
   steering_rationale: string[];
   metadata: {
-    source: "guided_fixture" | "live";
+    source: "live";
     scenario_id: string;
     source_attempt: number;
     provider: string;

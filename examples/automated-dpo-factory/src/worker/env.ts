@@ -10,11 +10,9 @@ export interface Env {
   ASSETS: AssetsBinding;
   DEMO_RATE_LIMITER: RateLimiterBinding;
   RAMEN_API_KEY: string;
-  PROVIDER_API_KEY: string;
+  OPENAI_API_KEY: string;
   TURNSTILE_SECRET_KEY: string;
   SESSION_SIGNING_SECRET: string;
-  RAMEN_API_BASE_URL: string;
-  PROVIDER_NAME: string;
   TURNSTILE_SITE_KEY: string;
   TURNSTILE_EXPECTED_ACTION: string;
   SESSION_COOKIE_NAME: string;

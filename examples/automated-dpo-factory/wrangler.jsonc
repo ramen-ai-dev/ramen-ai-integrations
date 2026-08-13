@@ -19,8 +19,6 @@
     }
   ],
   "vars": {
-    "RAMEN_API_BASE_URL": "https://api.ramenai.dev",
-    "PROVIDER_NAME": "openai",
     "TURNSTILE_SITE_KEY": "replace-with-your-site-key",
     "TURNSTILE_EXPECTED_ACTION": "foundry-demo",
     "SESSION_COOKIE_NAME": "ramen_foundry_session"

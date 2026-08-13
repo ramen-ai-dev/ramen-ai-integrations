@@ -18,8 +18,9 @@ export function StatusStreamer({ statuses, terminal }: { statuses: StatusData[];
         {statuses.length === 0 ? <p className="empty-copy">Run a scenario to watch each governance transition.</p> : null}
         {statuses.map((status, index) => {
           const copy = stageCopy[status.stage];
+          const active = terminal === "running" && index === statuses.length - 1;
           return (
-            <div className="stream-step" key={`${status.stage}-${status.attempt}-${index}`}>
+            <div className={`stream-step stream-step--${status.stage} ${active ? "stream-step--active" : ""}`} key={`${status.stage}-${status.attempt}-${index}`}>
               <span className="step-index">{String(index + 1).padStart(2, "0")}</span>
               <div><strong>{copy.label}</strong><p>{copy.detail}</p></div>
               <span className={`status-badge ${status.violations ? "status-badge--blocked" : ""}`}>

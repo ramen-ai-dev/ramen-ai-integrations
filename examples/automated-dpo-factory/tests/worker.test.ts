@@ -10,11 +10,9 @@ function environment(rateLimitSuccess = true): Env {
     ASSETS: { fetch: async () => new Response("asset") },
     DEMO_RATE_LIMITER: { limit: vi.fn(async () => ({ success: rateLimitSuccess })) },
     RAMEN_API_KEY: "ramen-server-key",
-    PROVIDER_API_KEY: "provider-server-key",
+    OPENAI_API_KEY: "openai-server-key",
     TURNSTILE_SECRET_KEY: "turnstile-server-key",
     SESSION_SIGNING_SECRET: signingSecret,
-    RAMEN_API_BASE_URL: "https://api.ramenai.dev",
-    PROVIDER_NAME: "openai",
     TURNSTILE_SITE_KEY: "public-site-key",
     TURNSTILE_EXPECTED_ACTION: "foundry-demo",
     SESSION_COOKIE_NAME: "ramen_foundry_session",
@@ -82,16 +80,18 @@ describe("Foundry Worker security boundary", () => {
         Origin: "https://demo.example.com",
         Cookie: `ramen_foundry_session=${token}`,
       },
-      body: JSON.stringify({ scenarioId: "affluent-postcode-heal" }),
+      body: JSON.stringify({ scenarioId: "geographic-redlining-proxy" }),
     }), env);
 
     expect(response.status).toBe(200);
     expect(response.headers.get("Content-Type")).toContain("text/event-stream");
+    expect(await response.text()).toContain("event: error");
     expect(env.DEMO_RATE_LIMITER.limit).toHaveBeenCalledWith({ key: payload.session_id });
+    expect(String(upstream.mock.calls[0]?.[0])).toBe("https://api.ramenai.dev/api/v1/generate/governed");
     const init = upstream.mock.calls[0]?.[1];
     const headers = new Headers(init?.headers);
     expect(headers.get("Authorization")).toBe("Bearer ramen-server-key");
-    expect(headers.get("X-Provider-Key")).toBe("provider-server-key");
+    expect(headers.get("X-Provider-Key")).toBe("openai-server-key");
     expect(headers.get("X-Provider")).toBe("openai");
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     expect(body).toMatchObject({ max_retries: 1, expose_healing_trail: true, generation: { max_tokens: 420, temperature: 0.2 } });
@@ -107,7 +107,7 @@ describe("Foundry Worker security boundary", () => {
     const response = await handleRequest(new Request("https://demo.example.com/api/demo/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json", Origin: "https://demo.example.com", Cookie: `ramen_foundry_session=${token}` },
-      body: JSON.stringify({ scenarioId: "skills-only-pass" }),
+      body: JSON.stringify({ scenarioId: "pure-merit-control" }),
     }), env);
 
     expect(response.status).toBe(429);
@@ -118,7 +118,7 @@ describe("Foundry Worker security boundary", () => {
     const response = await handleRequest(new Request("https://demo.example.com/api/demo/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json", Origin: "https://attacker.example.com" },
-      body: JSON.stringify({ scenarioId: "skills-only-pass" }),
+      body: JSON.stringify({ scenarioId: "pure-merit-control" }),
     }), environment());
     expect(response.status).toBe(403);
   });

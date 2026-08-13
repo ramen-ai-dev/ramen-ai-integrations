@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { AttemptMetadata, DpoRecord, GovernedBlockedData, GovernedCompleteData } from "../../shared/schemas";
 
 function attemptsFrom(result?: GovernedCompleteData | GovernedBlockedData): AttemptMetadata[] {
@@ -73,7 +74,7 @@ export function DatasetLab({ records, onClear }: { records: DpoRecord[]; onClear
         <div className="record-list">
           {records.map((record, index) => (
             <details key={`${record.metadata.scenario_id}-${record.metadata.source_attempt}-${index}`}>
-              <summary><span>Pair {index + 1}</span><strong>{record.metadata.scenario_id}</strong><em>{record.metadata.source.replace("_", " ")}</em></summary>
+              <summary><span>Pair {index + 1}</span><strong>{record.metadata.scenario_id}</strong><em>{record.metadata.source}</em></summary>
               <div className="record-grid">
                 <div><span>Rejected</span><p>{record.rejected}</p></div>
                 <div><span>Chosen</span><p>{record.chosen}</p></div>
@@ -86,17 +87,87 @@ export function DatasetLab({ records, onClear }: { records: DpoRecord[]; onClear
   );
 }
 
-export function ResponseComparison({ result }: { result?: GovernedCompleteData | GovernedBlockedData }) {
+export function GlassBreakCascade({ result }: { result?: GovernedCompleteData | GovernedBlockedData }) {
+  const rejectedAttempt = attemptsFrom(result).find((attempt) => !attempt.allowed && attempt.rejected_content);
+  const rejectedContent = rejectedAttempt?.rejected_content ?? "";
+  const steering = rejectedAttempt?.steering_rationale ?? [];
+  const chosenContent = result && "content" in result ? result.content : undefined;
+  const retryOccurred = Boolean(result && result.attempts > 1 && rejectedAttempt);
+  const [visibleCharacters, setVisibleCharacters] = useState(0);
+  const [glassBroken, setGlassBroken] = useState(false);
+
+  useEffect(() => {
+    setVisibleCharacters(0);
+    setGlassBroken(false);
+    if (!retryOccurred || !rejectedContent) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setVisibleCharacters(rejectedContent.length);
+      setGlassBroken(true);
+      return;
+    }
+
+    const characterStep = Math.max(1, Math.ceil(rejectedContent.length / 90));
+    const interval = window.setInterval(() => {
+      setVisibleCharacters((current) => {
+        const next = Math.min(rejectedContent.length, current + characterStep);
+        if (next === rejectedContent.length) window.clearInterval(interval);
+        return next;
+      });
+    }, 18);
+    return () => window.clearInterval(interval);
+  }, [rejectedContent, retryOccurred]);
+
+  useEffect(() => {
+    if (!retryOccurred || !rejectedContent || visibleCharacters < rejectedContent.length || glassBroken) return;
+    const timer = window.setTimeout(() => setGlassBroken(true), 140);
+    return () => window.clearTimeout(timer);
+  }, [glassBroken, rejectedContent, retryOccurred, visibleCharacters]);
+
   if (!result) return null;
-  const rejected = result.attempt_metadata.find((attempt) => !attempt.allowed && attempt.rejected_content)?.rejected_content;
-  const approved = "content" in result ? result.content : undefined;
+
+  if (!retryOccurred) {
+    return (
+      <section className="glass-break" aria-labelledby="glass-heading">
+        <div className="section-heading"><div><span className="kicker">Governed result</span><h2 id="glass-heading">No intervention required.</h2></div></div>
+        <article className={`glass-card ${chosenContent ? "glass-card--chosen" : "glass-card--blocked"}`}>
+          <span>{chosenContent ? "Verified on first attempt" : "Release blocked"}</span>
+          <p>{chosenContent ?? "Governance did not release a final response."}</p>
+        </article>
+      </section>
+    );
+  }
+
+  const pairCount = attemptsFrom(result).filter((attempt) => !attempt.allowed && attempt.rejected_content).length;
   return (
-    <section className="response-comparison" aria-labelledby="response-heading">
-      <div className="section-heading"><div><span className="kicker">Decision outcome</span><h2 id="response-heading">Before governance. After governance.</h2></div></div>
-      <div className="response-grid">
-        <article className="response-card response-card--rejected"><span>Raw model attempt</span><p>{rejected ?? "No rejected content was exposed."}</p></article>
-        <div className="transform-arrow" aria-hidden="true">→</div>
-        <article className={`response-card ${approved ? "response-card--approved" : "response-card--blocked"}`}><span>{approved ? "Approved output" : "Release blocked"}</span><p>{approved ?? "Governance did not release a final response."}</p></article>
+    <section className="glass-break" aria-labelledby="glass-heading">
+      <div className="section-heading"><div><span className="kicker">L2 interception replay</span><h2 id="glass-heading">Rejected. Steered. Chosen.</h2></div></div>
+      <div className="glass-cascade" aria-live="polite">
+        <div className="glass-step-label"><b>01</b><span>Rejected model output</span></div>
+        <article className={`glass-card glass-card--rejected ${glassBroken ? "glass-card--broken" : "glass-card--typing"}`}>
+          <span>Intercepted before release</span>
+          <p aria-hidden="true">{rejectedContent.slice(0, visibleCharacters)}<i className="typewriter-caret" /></p>
+          <p className="sr-only">{rejectedContent}</p>
+          <div className="glass-fracture" aria-hidden="true" />
+        </article>
+
+        <div className="glass-step-label"><b>02</b><span>Policy steering</span></div>
+        <aside className={`glass-steering ${glassBroken ? "glass-steering--visible" : ""}`}>
+          <strong>Why the output was rejected</strong>
+          {steering.length > 0 ? <ul>{steering.map((item) => <li key={item}>{item}</li>)}</ul> : <p>The endpoint reported a rejected attempt without an exposed rationale.</p>}
+        </aside>
+
+        <div className="glass-step-label"><b>03</b><span>Governed response</span></div>
+        <article className={`glass-card ${chosenContent ? "glass-card--chosen" : "glass-card--blocked"} ${glassBroken ? "glass-card--released" : "glass-card--pending"}`}>
+          <span>{chosenContent ? "Verified output released" : "Release blocked"}</span>
+          <p>{chosenContent ?? "Governance did not release a compliant final response."}</p>
+        </article>
+
+        {chosenContent ? (
+          <div className={`alignment-log ${glassBroken ? "alignment-log--visible" : ""}`}>
+            <strong>DPO alignment log updated</strong>
+            <span>{pairCount} rejected/chosen preference pair{pairCount === 1 ? "" : "s"} captured in browser memory from live attempt metadata.</span>
+          </div>
+        ) : null}
       </div>
     </section>
   );

@@ -26,7 +26,6 @@
   "governance": {
     "policyIds": ["0d5ed2af-5e98-4a8c-92c3-dea26c07bf9a"],
     "maxRetries": 1,
-    "exposeHealingTrail": true,
     "generation": {
       "temperature": 0.2,
       "maxTokens": 420

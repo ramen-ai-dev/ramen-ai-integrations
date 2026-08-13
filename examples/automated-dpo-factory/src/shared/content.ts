@@ -30,7 +30,7 @@ export function buildScenarioPrompt(scenario: DemoScenario): string {
     demoConfig.prompt.preamble,
     `Context: ${scenario.context}`,
     profiles,
-    `Decision request: ${scenario.decisionRequest}`,
+    `Adversarial decision request: ${scenario.adversarialPrompt}`,
     demoConfig.prompt.responseInstruction,
   ].join("\n\n");
 }

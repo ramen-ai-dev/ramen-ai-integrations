@@ -1,18 +1,115 @@
+import {
+  GovernanceDeniedException,
+  GovernedGenerationException,
+  RamenClient,
+  type GovernedStreamEvent,
+} from "@ramen-ai/node-core";
 import { demoConfig, getScenario, buildScenarioPrompt } from "../shared/content";
 import { generateRequestSchema } from "../shared/schemas";
 import { SECURITY_LIMITS } from "../shared/security";
-import { isEventStreamContentType } from "../shared/sse";
 import type { Env } from "./env";
 import { applySecurityHeaders, errorResponse, readJsonBody, RequestBodyError } from "./http";
 import { readCookie, verifySessionToken } from "./session";
 
-const GOVERNED_PATH = "/api/v1/generate/governed";
+const RAMEN_API_BASE_URL = "https://api.ramenai.dev";
+const encoder = new TextEncoder();
 
-function governedEndpoint(baseUrl: string): string {
-  const url = new URL(GOVERNED_PATH, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
-  const local = url.hostname === "localhost" || url.hostname === "127.0.0.1";
-  if (url.protocol !== "https:" && !local) throw new Error("RAMEN_API_BASE_URL must use HTTPS");
-  return url.toString();
+function abortableFetch(externalSignal: AbortSignal): typeof fetch {
+  return async (input, init) => {
+    const controller = new AbortController();
+    const signals = [externalSignal, init?.signal].filter((signal): signal is AbortSignal => Boolean(signal));
+    const abort = () => controller.abort();
+    if (signals.some((signal) => signal.aborted)) controller.abort();
+    else signals.forEach((signal) => signal.addEventListener("abort", abort, { once: true }));
+
+    try {
+      return await fetch(input, { ...init, signal: controller.signal });
+    } finally {
+      signals.forEach((signal) => signal.removeEventListener("abort", abort));
+    }
+  };
+}
+
+function encodeEvent(event: string, data: unknown): Uint8Array {
+  return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
+function eventFrame(event: GovernedStreamEvent): Uint8Array {
+  return encodeEvent(event.event, event.data);
+}
+
+function governedEventStream(
+  client: RamenClient,
+  prompt: string,
+  upstreamAbort: AbortController,
+  requestSignal: AbortSignal,
+): ReadableStream<Uint8Array> {
+  let source: AsyncGenerator<GovernedStreamEvent> | undefined;
+  let cancelled = false;
+  const abortUpstream = () => upstreamAbort.abort();
+  if (requestSignal.aborted) abortUpstream();
+  else requestSignal.addEventListener("abort", abortUpstream, { once: true });
+
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      source = client.generateGovernedStream(prompt, {
+        policyIds: demoConfig.governance.policyIds,
+        maxRetries: demoConfig.governance.maxRetries,
+        exposeHealingTrail: true,
+        generation: {
+          temperature: demoConfig.governance.generation.temperature,
+          maxTokens: demoConfig.governance.generation.maxTokens,
+        },
+      });
+
+      try {
+        for await (const event of source) {
+          if (cancelled) return;
+          controller.enqueue(eventFrame(event));
+        }
+      } catch (error) {
+        if (cancelled) return;
+        if (error instanceof GovernanceDeniedException) {
+          controller.enqueue(encodeEvent("blocked", {
+            success: false,
+            error: {
+              code: error.code,
+              message: error.message,
+              http_status: error.status,
+            },
+            data: error.data,
+          }));
+        } else if (error instanceof GovernedGenerationException) {
+          controller.enqueue(encodeEvent("error", {
+            success: false,
+            error: {
+              code: error.code,
+              message: error.message,
+              http_status: error.status ?? 502,
+            },
+          }));
+        } else {
+          controller.enqueue(encodeEvent("error", {
+            success: false,
+            error: {
+              code: "UPSTREAM_UNAVAILABLE",
+              message: "The governed generation service is unavailable",
+              http_status: 502,
+            },
+          }));
+        }
+      } finally {
+        requestSignal.removeEventListener("abort", abortUpstream);
+        if (!cancelled) controller.close();
+      }
+    },
+    async cancel() {
+      cancelled = true;
+      upstreamAbort.abort();
+      requestSignal.removeEventListener("abort", abortUpstream);
+      await source?.return(undefined);
+    },
+  });
 }
 
 export async function handleGenerate(request: Request, env: Env): Promise<Response> {
@@ -34,56 +131,24 @@ export async function handleGenerate(request: Request, env: Env): Promise<Respon
 
   const scenario = getScenario(parsed.data.scenarioId);
   if (!scenario) return errorResponse(404, "SCENARIO_NOT_FOUND", "The requested scenario is not configured");
-  if (!env.RAMEN_API_KEY || !env.PROVIDER_API_KEY) return errorResponse(503, "DEMO_NOT_CONFIGURED", "The live demo credentials are not configured");
+  if (!env.RAMEN_API_KEY || !env.OPENAI_API_KEY) return errorResponse(503, "DEMO_NOT_CONFIGURED", "The live demo credentials are not configured");
 
   const rateLimit = await env.DEMO_RATE_LIMITER.limit({ key: session.session_id });
   if (!rateLimit.success) {
     return errorResponse(429, "BURST_LIMIT_EXCEEDED", "This session reached the five-request burst limit; retry after the 60-second window resets");
   }
 
-  const upstreamBody = {
-    prompt: buildScenarioPrompt(scenario),
-    policy_ids: demoConfig.governance.policyIds,
-    max_retries: demoConfig.governance.maxRetries,
-    expose_healing_trail: demoConfig.governance.exposeHealingTrail,
-    generation: {
-      temperature: demoConfig.governance.generation.temperature,
-      max_tokens: demoConfig.governance.generation.maxTokens,
-    },
-  };
-
-  let upstream: Response;
-  try {
-    upstream = await fetch(governedEndpoint(env.RAMEN_API_BASE_URL), {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.RAMEN_API_KEY}`,
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
-        "X-Provider-Key": env.PROVIDER_API_KEY,
-        "X-Provider": env.PROVIDER_NAME,
-      },
-      body: JSON.stringify(upstreamBody),
-      signal: AbortSignal.timeout(SECURITY_LIMITS.upstreamTimeoutMs),
-    });
-  } catch (error) {
-    const timedOut = error instanceof DOMException && error.name === "TimeoutError";
-    return errorResponse(504, timedOut ? "UPSTREAM_TIMEOUT" : "UPSTREAM_UNAVAILABLE", timedOut ? "The governed generation timed out" : "The governed generation service is unavailable");
-  }
-
-  if (!upstream.ok) {
-    return errorResponse(
-      upstream.status >= 400 && upstream.status < 500 ? upstream.status : 502,
-      "UPSTREAM_REJECTED",
-      "The governed generation request was rejected",
-    );
-  }
-  if (!isEventStreamContentType(upstream.headers.get("Content-Type")) || !upstream.body) {
-    return errorResponse(502, "UPSTREAM_PROTOCOL_ERROR", "The governed generation service did not return an event stream");
-  }
+  const upstreamAbort = new AbortController();
+  const client = new RamenClient({
+    apiKey: env.RAMEN_API_KEY,
+    baseUrl: RAMEN_API_BASE_URL,
+    providerKey: env.OPENAI_API_KEY,
+    providerName: "openai",
+    fetchImpl: abortableFetch(upstreamAbort.signal),
+  });
 
   return applySecurityHeaders(
-    new Response(upstream.body, {
+    new Response(governedEventStream(client, buildScenarioPrompt(scenario), upstreamAbort, request.signal), {
       headers: {
         "Content-Type": "text/event-stream; charset=utf-8",
         "Cache-Control": "no-store, no-transform",
