@@ -5,7 +5,7 @@ import { createSession } from "../run";
 declare global {
   interface Window {
     turnstile?: {
-      render(container: HTMLElement, options: { sitekey: string; action: string; theme: "dark"; callback: (token: string) => void; "error-callback": () => void; "expired-callback": () => void }): string;
+      render(container: HTMLElement, options: { sitekey: string; action: string; theme: "light"; callback: (token: string) => void; "error-callback": () => void; "expired-callback": () => void }): string;
       remove(widgetId: string): void;
       reset(widgetId: string): void;
     };
@@ -27,7 +27,7 @@ export function TurnstileGate({ config, onSession }: { config: PublicConfig; onS
       widgetRef.current = window.turnstile.render(containerRef.current, {
         sitekey: config.turnstileSiteKey,
         action: config.turnstileAction,
-        theme: "dark",
+        theme: "light",
         callback: async (token) => {
           setStatus("verifying");
           setMessage("Verifying and opening a one-hour session…");
