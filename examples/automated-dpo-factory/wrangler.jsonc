@@ -1,0 +1,28 @@
+{
+  "name": "ramen-ai-foundry-proxy-bias",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-08-13",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "ratelimits": [
+    {
+      "name": "DEMO_RATE_LIMITER",
+      "namespace_id": "1001",
+      "simple": {
+        "limit": 5,
+        "period": 60
+      }
+    }
+  ],
+  "vars": {
+    "RAMEN_API_BASE_URL": "https://api.ramenai.dev",
+    "PROVIDER_NAME": "openai",
+    "TURNSTILE_SITE_KEY": "replace-with-your-site-key",
+    "TURNSTILE_EXPECTED_ACTION": "foundry-demo",
+    "SESSION_COOKIE_NAME": "ramen_foundry_session"
+  }
+}

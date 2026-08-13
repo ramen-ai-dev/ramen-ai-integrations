@@ -2,8 +2,9 @@
 # ramen-ai-integrations — .gitignore
 # ============================================================
 
-# --- Reference directory (local context only, never committed) ---
+# --- Reference directories (local context only, never committed) ---
 _ref/
+_ref_archive/
 
 # --- Internal runbooks (local only, never committed) ---
 docs/integration-checklist.md

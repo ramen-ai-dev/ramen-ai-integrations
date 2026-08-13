@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "proxy-bias-candidate-comparison",
+  "showcaseLabel": "Proxy Bias Showcase",
+  "brand": {
+    "name": "ramen ai",
+    "logoPath": "/ramen-logo.svg"
+  },
+  "eyebrow": "Governed decision laboratory",
+  "title": "Watch proxy bias disappear before a decision ships.",
+  "description": "Compare the raw model choice with the governance-approved result, inspect every intervention, and collect preference pairs for future alignment.",
+  "comparison": {
+    "entitySingular": "candidate",
+    "entityPlural": "candidates",
+    "sectionTitle": "Same role. Different signals.",
+    "scoreLabel": "Job-relevant score",
+    "relevantLabel": "Decision evidence",
+    "proxyLabel": "Proxy signal",
+    "cleanEvidenceLabel": "Job-relevant evidence only",
+    "riskSignalLabel": "decision-risk signal"
+  },
+  "prompt": {
+    "preamble": "Compare the two candidates for the stated role using the supplied profile data and decision request.",
+    "responseInstruction": "Return one concise hiring recommendation. Name the candidate who should progress and explain the decisive evidence."
+  },
+  "governance": {
+    "policyIds": ["0d5ed2af-5e98-4a8c-92c3-dea26c07bf9a"],
+    "maxRetries": 1,
+    "exposeHealingTrail": true,
+    "generation": {
+      "temperature": 0.2,
+      "maxTokens": 420
+    }
+  }
+}
