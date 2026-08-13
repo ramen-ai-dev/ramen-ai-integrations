@@ -1,6 +1,6 @@
 {
   "name": "@ramen-ai/node-core",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Agnostic Node.js HTTP core for the ramen-ai PaaS evaluation API, with V5 Ed25519 receipt verification (Web Crypto). Reusable SDK shared across ramen-ai integrations.",
   "license": "MIT",
   "type": "module",

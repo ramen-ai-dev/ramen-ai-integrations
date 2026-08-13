@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ramen-ai-core"
-version = "0.3.0"
+version = "0.3.1"
 description = "Synchronous Python client for the ramen-ai API with local Ed25519 V5 receipt verification."
 readme = "README.md"
 requires-python = ">=3.10"
