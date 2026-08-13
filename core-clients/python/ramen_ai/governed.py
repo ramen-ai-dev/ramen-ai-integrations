@@ -43,12 +43,20 @@ def generate_governed(
     bundle_ids: Sequence[str] | None = None,
     max_retries: Literal[0, 1] = 1,
     generation: GovernedGenerationOptions | None = None,
+    expose_healing_trail: bool = False,
     provider_key: str | None = None,
     provider_name: GovernedProviderName | None = None,
 ) -> GovernedCompleteData:
     """Execute a governed generation request and return released content."""
 
-    body = _build_body(prompt, policy_ids, bundle_ids, max_retries, generation)
+    body = _build_body(
+        prompt,
+        policy_ids,
+        bundle_ids,
+        max_retries,
+        generation,
+        expose_healing_trail,
+    )
     headers = _provider_headers(provider_key, provider_name)
     try:
         response = client.post(
@@ -79,12 +87,20 @@ def generate_governed_stream(
     bundle_ids: Sequence[str] | None = None,
     max_retries: Literal[0, 1] = 1,
     generation: GovernedGenerationOptions | None = None,
+    expose_healing_trail: bool = False,
     provider_key: str | None = None,
     provider_name: GovernedProviderName | None = None,
 ) -> Iterator[GovernedStreamEvent]:
     """Yield governed status events and the successful terminal event."""
 
-    body = _build_body(prompt, policy_ids, bundle_ids, max_retries, generation)
+    body = _build_body(
+        prompt,
+        policy_ids,
+        bundle_ids,
+        max_retries,
+        generation,
+        expose_healing_trail,
+    )
     headers = {
         "Accept": "text/event-stream",
         **_provider_headers(provider_key, provider_name),
@@ -175,6 +191,7 @@ def _build_body(
     bundle_ids: Sequence[str] | None,
     max_retries: Literal[0, 1],
     generation: GovernedGenerationOptions | None,
+    expose_healing_trail: bool,
 ) -> dict[str, Any]:
     if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 10_000:
         raise ValueError("prompt must be a non-blank string of at most 10,000 characters")
@@ -184,6 +201,8 @@ def _build_body(
         raise ValueError("max_retries must be 0 or 1")
 
     body: dict[str, Any] = {"prompt": prompt, "max_retries": max_retries}
+    if expose_healing_trail:
+        body["expose_healing_trail"] = True
     if policy_ids:
         body["policy_ids"] = list(policy_ids)
     if bundle_ids:
@@ -391,6 +410,15 @@ def _parse_attempt_metadata(value: Any) -> tuple[GovernedAttemptMetadata, ...]:
     for item in items:
         data = _expect_mapping(item, "attempt_metadata item")
         usage_value = data.get("usage")
+        rejected_content = data.get("rejected_content")
+        if rejected_content is not None and not isinstance(rejected_content, str):
+            raise TypeError("rejected_content must be a string")
+        steering_rationale_value = data.get("steering_rationale")
+        steering_rationale = (
+            _expect_string_list(steering_rationale_value, "steering_rationale")
+            if steering_rationale_value is not None
+            else None
+        )
         parsed.append(
             GovernedAttemptMetadata(
                 attempt=_required_int(data, "attempt"),
@@ -405,6 +433,8 @@ def _parse_attempt_metadata(value: Any) -> tuple[GovernedAttemptMetadata, ...]:
                 policies_evaluated=_required_int(data, "policies_evaluated"),
                 allowed=_required_bool(data, "allowed"),
                 usage=_parse_usage(usage_value) if usage_value is not None else None,
+                rejected_content=rejected_content,
+                steering_rationale=steering_rationale,
             )
         )
     return tuple(parsed)

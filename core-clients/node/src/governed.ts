@@ -201,6 +201,9 @@ function buildBody(
   const body: GovernedGenerateWireRequest = { prompt, max_retries: maxRetries };
   if (options.policyIds?.length) body.policy_ids = [...options.policyIds];
   if (options.bundleIds?.length) body.bundle_ids = [...options.bundleIds];
+  if (options.exposeHealingTrail !== undefined) {
+    body.expose_healing_trail = options.exposeHealingTrail;
+  }
   if (options.generation) {
     const { temperature, maxTokens } = options.generation;
     if (
@@ -455,6 +458,12 @@ function parseAttempts(value: unknown): GovernedAttemptMetadata[] {
       policies_evaluated: integerField(attempt, "policies_evaluated"),
       allowed: booleanField(attempt, "allowed"),
       ...(attempt.usage !== undefined ? { usage: parseUsage(attempt.usage) } : {}),
+      ...(attempt.rejected_content !== undefined
+        ? { rejected_content: stringField(attempt, "rejected_content") }
+        : {}),
+      ...(attempt.steering_rationale !== undefined
+        ? { steering_rationale: stringArrayField(attempt, "steering_rationale") }
+        : {}),
     };
   });
 }

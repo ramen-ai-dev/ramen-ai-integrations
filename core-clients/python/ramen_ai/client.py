@@ -249,6 +249,7 @@ class RamenClient:
         bundle_ids: Sequence[str] | None = None,
         max_retries: Literal[0, 1] = 1,
         generation: GovernedGenerationOptions | None = None,
+        expose_healing_trail: bool = False,
         provider_key: str | None = None,
         provider_name: GovernedProviderName | None = None,
     ) -> GovernedCompleteData:
@@ -260,6 +261,7 @@ class RamenClient:
             bundle_ids=bundle_ids,
             max_retries=max_retries,
             generation=generation,
+            expose_healing_trail=expose_healing_trail,
             provider_key=provider_key,
             provider_name=provider_name,
         )
@@ -272,6 +274,7 @@ class RamenClient:
         bundle_ids: Sequence[str] | None = None,
         max_retries: Literal[0, 1] = 1,
         generation: GovernedGenerationOptions | None = None,
+        expose_healing_trail: bool = False,
         provider_key: str | None = None,
         provider_name: GovernedProviderName | None = None,
     ) -> Iterator[GovernedStreamEvent]:
@@ -283,6 +286,7 @@ class RamenClient:
             bundle_ids=bundle_ids,
             max_retries=max_retries,
             generation=generation,
+            expose_healing_trail=expose_healing_trail,
             provider_key=provider_key,
             provider_name=provider_name,
         )

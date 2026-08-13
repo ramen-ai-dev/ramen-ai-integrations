@@ -17,6 +17,7 @@ export interface GenerateGovernedOptions {
   bundleIds?: readonly string[];
   maxRetries?: 0 | 1;
   generation?: GovernedGenerationOptions;
+  exposeHealingTrail?: boolean;
 }
 
 export interface GovernedGenerateWireRequest {
@@ -28,6 +29,7 @@ export interface GovernedGenerateWireRequest {
     temperature?: number;
     max_tokens?: number;
   };
+  expose_healing_trail?: boolean;
 }
 
 export interface GovernedTokenUsage {
@@ -45,6 +47,8 @@ export interface GovernedAttemptMetadata {
   policies_evaluated: number;
   allowed: boolean;
   usage?: GovernedTokenUsage;
+  rejected_content?: string;
+  steering_rationale?: string[];
 }
 
 export interface GovernedAccounting {

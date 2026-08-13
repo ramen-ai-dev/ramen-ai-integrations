@@ -45,6 +45,8 @@ class GovernedAttemptMetadata:
     policies_evaluated: int
     allowed: bool
     usage: GovernedTokenUsage | None = None
+    rejected_content: str | None = None
+    steering_rationale: list[str] | None = None
 
 
 @dataclass(frozen=True, slots=True)
