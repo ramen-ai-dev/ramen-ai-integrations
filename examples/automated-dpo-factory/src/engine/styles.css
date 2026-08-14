@@ -193,6 +193,9 @@ code { color: var(--cyan); }
 .glass-card--chosen > span { color: var(--green); }
 .glass-card--chosen p { color: #254f40; }
 .glass-card--blocked { border-color: #e3a6a6; background: var(--red-soft); }
+.glass-card--terminal-block { border: 2px solid #ff9c9c; background: #641f27; color: #fff5f5; box-shadow: 0 8px 24px rgba(100, 31, 39, 0.24); }
+.glass-card--terminal-block > span { color: #ffc2c2; }
+.glass-card--terminal-block p { color: #fff; font-size: 0.84rem; font-weight: 760; line-height: 1.55; }
 .glass-card--pending { opacity: 0; transform: translateY(-10px); }
 .glass-card--released { animation: chosen-release 420ms 260ms ease both; }
 .alignment-log { grid-column: 2; padding: 10px 13px; display: flex; align-items: center; justify-content: space-between; gap: 18px; border: 1px dashed #8ac9b0; border-radius: 8px; background: #f6fcf9; opacity: 0; transform: translateY(-5px); }

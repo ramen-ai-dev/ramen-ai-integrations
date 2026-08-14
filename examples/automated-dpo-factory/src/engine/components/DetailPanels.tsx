@@ -105,12 +105,15 @@ export function DatasetLab({ records, onClear }: { records: DpoRecord[]; onClear
   );
 }
 
+const TERMINAL_BLOCK_MESSAGE = "Terminal Block: Model failed to heal within retry limits.";
+
 export function GlassBreakCascade({ result }: { result?: GovernedCompleteData | GovernedBlockedData }) {
   const deniedAttempts = attemptsFrom(result).filter((attempt) => !attempt.allowed);
   const rejectedAttempt = deniedAttempts.find((attempt) => attempt.rejected_content) ?? deniedAttempts[0];
   const rejectedContent = rejectedAttempt?.rejected_content ?? "The rejected model output was not exposed by the endpoint.";
   const steering = steeringFrom(deniedAttempts);
-  const chosenContent = result && "content" in result ? result.content : undefined;
+  const isBlocked = Boolean(result && !("content" in result));
+  const chosenContent = result && "content" in result ? result.content : "";
   const glassBreakTriggered = Boolean(result && result.attempts > 1);
   const [visibleCharacters, setVisibleCharacters] = useState(0);
   const [glassBroken, setGlassBroken] = useState(false);
@@ -147,12 +150,12 @@ export function GlassBreakCascade({ result }: { result?: GovernedCompleteData | 
   if (!glassBreakTriggered) {
     return (
       <section className="glass-break" aria-labelledby="glass-heading">
-        <div className="section-heading"><div><span className="kicker">Governed result</span><h2 id="glass-heading">{chosenContent ? "No intervention required." : "Release blocked."}</h2></div></div>
-        <article className={`glass-card ${chosenContent ? "glass-card--chosen" : "glass-card--blocked"}`}>
-          <span>{chosenContent ? "Verified on first attempt" : "Release blocked"}</span>
-          <p>{chosenContent ?? "Governance did not release a final response."}</p>
+        <div className="section-heading"><div><span className="kicker">Governed result</span><h2 id="glass-heading">{isBlocked ? "Terminal governance block." : "No intervention required."}</h2></div></div>
+        <article className={`glass-card ${isBlocked ? "glass-card--terminal-block" : "glass-card--chosen"}`} role={isBlocked ? "alert" : undefined}>
+          <span>{isBlocked ? "Retry limit reached" : "Verified on first attempt"}</span>
+          <p>{isBlocked ? TERMINAL_BLOCK_MESSAGE : chosenContent || "The governed endpoint returned an empty final response."}</p>
         </article>
-        {!chosenContent ? <SteeringBanner rationale={steering} visible /> : null}
+        {isBlocked ? <SteeringBanner rationale={steering} visible /> : null}
       </section>
     );
   }
@@ -160,7 +163,7 @@ export function GlassBreakCascade({ result }: { result?: GovernedCompleteData | 
   const pairCount = deniedAttempts.filter((attempt) => attempt.rejected_content).length;
   return (
     <section className="glass-break" aria-labelledby="glass-heading">
-      <div className="section-heading"><div><span className="kicker">L2 interception replay</span><h2 id="glass-heading">Rejected. Steered. Chosen.</h2></div></div>
+      <div className="section-heading"><div><span className="kicker">L2 interception replay</span><h2 id="glass-heading">{isBlocked ? "Rejected. Steered. Terminal block." : "Rejected. Steered. Chosen."}</h2></div></div>
       <div className="glass-cascade" aria-live="polite">
         <div className="glass-step-label"><b>01</b><span>Rejected model output</span></div>
         <article className={`glass-card glass-card--rejected ${glassBroken ? "glass-card--broken" : "glass-card--typing"}`}>
@@ -173,13 +176,16 @@ export function GlassBreakCascade({ result }: { result?: GovernedCompleteData | 
         <div className="glass-step-label"><b>02</b><span>Policy steering</span></div>
         <SteeringBanner rationale={steering} visible={glassBroken} />
 
-        <div className="glass-step-label"><b>03</b><span>Governed response</span></div>
-        <article className={`glass-card ${chosenContent ? "glass-card--chosen" : "glass-card--blocked"} ${glassBroken ? "glass-card--released" : "glass-card--pending"}`}>
-          <span>{chosenContent ? "Verified output released" : "Release blocked"}</span>
-          <p>{chosenContent ?? "Governance did not release a compliant final response."}</p>
+        <div className="glass-step-label"><b>03</b><span>{isBlocked ? "Terminal outcome" : "Governed response"}</span></div>
+        <article
+          className={`glass-card ${isBlocked ? "glass-card--terminal-block" : "glass-card--chosen"} ${glassBroken ? "glass-card--released" : "glass-card--pending"}`}
+          role={isBlocked ? "alert" : undefined}
+        >
+          <span>{isBlocked ? "Retry limit reached" : "Verified output released"}</span>
+          <p>{isBlocked ? TERMINAL_BLOCK_MESSAGE : chosenContent || "The governed endpoint returned an empty final response."}</p>
         </article>
 
-        {chosenContent ? (
+        {!isBlocked ? (
           <div className={`alignment-log ${glassBroken ? "alignment-log--visible" : ""}`}>
             <strong>DPO alignment log updated</strong>
             <span>{pairCount} rejected/chosen preference pair{pairCount === 1 ? "" : "s"} captured in browser memory from live attempt metadata.</span>
