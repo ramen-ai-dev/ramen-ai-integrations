@@ -28,23 +28,41 @@ export function AttemptTrace({ result }: { result?: GovernedCompleteData | Gover
   );
 }
 
+function steeringFrom(attempts: AttemptMetadata[]): string[] {
+  return [...new Set(attempts.flatMap((attempt) => attempt.steering_rationale ?? []))];
+}
+
+function SteeringBanner({ rationale, visible }: { rationale: string[]; visible: boolean }) {
+  return (
+    <aside
+      className={`glass-steering ${visible ? "glass-steering--visible" : ""}`}
+      role="status"
+      aria-label="Firewall steering rationale"
+    >
+      <strong>Firewall intent detected</strong>
+      {rationale.length > 0 ? <ul>{rationale.map((item) => <li key={item}>{item}</li>)}</ul> : <p>The endpoint reported a rejected attempt without an exposed rationale.</p>}
+    </aside>
+  );
+}
+
 export function HealingTrail({ result }: { result?: GovernedCompleteData | GovernedBlockedData }) {
-  const rejected = attemptsFrom(result).filter((attempt) => !attempt.allowed && attempt.rejected_content);
-  if (rejected.length === 0) return <p className="empty-panel">No exposed rejected attempt. Clean approvals do not require healing.</p>;
+  const rejected = attemptsFrom(result).filter((attempt) => !attempt.allowed);
+  if (rejected.length === 0) return <p className="empty-panel">No rejected attempt. Clean approvals do not require healing.</p>;
   return (
     <div className="healing-list">
-      {rejected.map((attempt) => (
-        <article className="healing-card" key={attempt.attempt}>
-          <span className="kicker">Rejected attempt {attempt.attempt}</span>
-          <blockquote>{attempt.rejected_content}</blockquote>
-          <div className="steering-box">
-            <strong>Policy steering</strong>
-            {(attempt.steering_rationale ?? []).length > 0 ? (
-              <ul>{attempt.steering_rationale?.map((item) => <li key={item}>{item}</li>)}</ul>
-            ) : <p>Steering rationale was not exposed by the endpoint.</p>}
-          </div>
-        </article>
-      ))}
+      {rejected.map((attempt) => {
+        const rationale = attempt.steering_rationale ?? [];
+        return (
+          <article className="healing-card" key={attempt.attempt}>
+            <span className="kicker">Rejected attempt {attempt.attempt}</span>
+            <blockquote>{attempt.rejected_content ?? "The rejected model output was not exposed by the endpoint."}</blockquote>
+            <div className="steering-box" role="status" aria-label="Firewall steering rationale">
+              <strong>Firewall intent detected</strong>
+              {rationale.length > 0 ? <ul>{rationale.map((item) => <li key={item}>{item}</li>)}</ul> : <p>Steering rationale was not exposed by the endpoint.</p>}
+            </div>
+          </article>
+        );
+      })}
     </div>
   );
 }
@@ -88,18 +106,19 @@ export function DatasetLab({ records, onClear }: { records: DpoRecord[]; onClear
 }
 
 export function GlassBreakCascade({ result }: { result?: GovernedCompleteData | GovernedBlockedData }) {
-  const rejectedAttempt = attemptsFrom(result).find((attempt) => !attempt.allowed && attempt.rejected_content);
-  const rejectedContent = rejectedAttempt?.rejected_content ?? "";
-  const steering = rejectedAttempt?.steering_rationale ?? [];
+  const deniedAttempts = attemptsFrom(result).filter((attempt) => !attempt.allowed);
+  const rejectedAttempt = deniedAttempts.find((attempt) => attempt.rejected_content) ?? deniedAttempts[0];
+  const rejectedContent = rejectedAttempt?.rejected_content ?? "The rejected model output was not exposed by the endpoint.";
+  const steering = steeringFrom(deniedAttempts);
   const chosenContent = result && "content" in result ? result.content : undefined;
-  const retryOccurred = Boolean(result && result.attempts > 1 && rejectedAttempt);
+  const glassBreakTriggered = Boolean(result && result.attempts > 1);
   const [visibleCharacters, setVisibleCharacters] = useState(0);
   const [glassBroken, setGlassBroken] = useState(false);
 
   useEffect(() => {
     setVisibleCharacters(0);
     setGlassBroken(false);
-    if (!retryOccurred || !rejectedContent) return;
+    if (!glassBreakTriggered) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       setVisibleCharacters(rejectedContent.length);
       setGlassBroken(true);
@@ -115,29 +134,30 @@ export function GlassBreakCascade({ result }: { result?: GovernedCompleteData | 
       });
     }, 18);
     return () => window.clearInterval(interval);
-  }, [rejectedContent, retryOccurred]);
+  }, [glassBreakTriggered, rejectedContent]);
 
   useEffect(() => {
-    if (!retryOccurred || !rejectedContent || visibleCharacters < rejectedContent.length || glassBroken) return;
+    if (!glassBreakTriggered || visibleCharacters < rejectedContent.length || glassBroken) return;
     const timer = window.setTimeout(() => setGlassBroken(true), 140);
     return () => window.clearTimeout(timer);
-  }, [glassBroken, rejectedContent, retryOccurred, visibleCharacters]);
+  }, [glassBreakTriggered, glassBroken, rejectedContent.length, visibleCharacters]);
 
   if (!result) return null;
 
-  if (!retryOccurred) {
+  if (!glassBreakTriggered) {
     return (
       <section className="glass-break" aria-labelledby="glass-heading">
-        <div className="section-heading"><div><span className="kicker">Governed result</span><h2 id="glass-heading">No intervention required.</h2></div></div>
+        <div className="section-heading"><div><span className="kicker">Governed result</span><h2 id="glass-heading">{chosenContent ? "No intervention required." : "Release blocked."}</h2></div></div>
         <article className={`glass-card ${chosenContent ? "glass-card--chosen" : "glass-card--blocked"}`}>
           <span>{chosenContent ? "Verified on first attempt" : "Release blocked"}</span>
           <p>{chosenContent ?? "Governance did not release a final response."}</p>
         </article>
+        {!chosenContent ? <SteeringBanner rationale={steering} visible /> : null}
       </section>
     );
   }
 
-  const pairCount = attemptsFrom(result).filter((attempt) => !attempt.allowed && attempt.rejected_content).length;
+  const pairCount = deniedAttempts.filter((attempt) => attempt.rejected_content).length;
   return (
     <section className="glass-break" aria-labelledby="glass-heading">
       <div className="section-heading"><div><span className="kicker">L2 interception replay</span><h2 id="glass-heading">Rejected. Steered. Chosen.</h2></div></div>
@@ -151,10 +171,7 @@ export function GlassBreakCascade({ result }: { result?: GovernedCompleteData | 
         </article>
 
         <div className="glass-step-label"><b>02</b><span>Policy steering</span></div>
-        <aside className={`glass-steering ${glassBroken ? "glass-steering--visible" : ""}`}>
-          <strong>Why the output was rejected</strong>
-          {steering.length > 0 ? <ul>{steering.map((item) => <li key={item}>{item}</li>)}</ul> : <p>The endpoint reported a rejected attempt without an exposed rationale.</p>}
-        </aside>
+        <SteeringBanner rationale={steering} visible={glassBroken} />
 
         <div className="glass-step-label"><b>03</b><span>Governed response</span></div>
         <article className={`glass-card ${chosenContent ? "glass-card--chosen" : "glass-card--blocked"} ${glassBroken ? "glass-card--released" : "glass-card--pending"}`}>

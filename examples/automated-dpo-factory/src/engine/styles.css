@@ -183,11 +183,12 @@ code { color: var(--cyan); }
 .glass-card--broken .glass-fracture { animation: fracture 700ms ease-out forwards; }
 .typewriter-caret { display: inline-block; width: 2px; height: 1em; margin-left: 2px; background: var(--red); vertical-align: -2px; animation: caret-blink 650ms steps(1) infinite; }
 .glass-card--broken .typewriter-caret { display: none; }
-.glass-steering { padding: 12px 15px; border: 1px solid #e2bc65; border-left: 4px solid var(--amber); border-radius: 8px; background: var(--amber-soft); opacity: 0; transform: translateY(-8px); }
+.glass-steering { padding: 15px 17px; border: 2px solid #f0b429; border-left: 6px solid #ffc247; border-radius: 8px; background: #5c3a00; color: #fff8df; box-shadow: 0 7px 20px rgba(92, 58, 0, 0.2); opacity: 0; transform: translateY(-8px); }
+.glass-break > .glass-steering { margin-top: 10px; }
 .glass-steering--visible { opacity: 1; transform: translateY(0); transition: opacity 260ms 180ms ease, transform 260ms 180ms ease; }
-.glass-steering strong { color: var(--amber); font-size: 0.58rem; letter-spacing: 0.09em; text-transform: uppercase; }
-.glass-steering ul { margin: 7px 0 0; padding-left: 18px; color: #614b20; font-size: 0.69rem; line-height: 1.5; }
-.glass-steering p { margin: 7px 0 0; color: #614b20; font-size: 0.69rem; }
+.glass-steering strong { color: #ffd166; font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; }
+.glass-steering ul { margin: 9px 0 0; padding-left: 20px; color: #fff8df; font-size: 0.75rem; font-weight: 620; line-height: 1.55; }
+.glass-steering p { margin: 9px 0 0; color: #fff8df; font-size: 0.75rem; font-weight: 620; line-height: 1.5; }
 .glass-card--chosen { border-color: #8ac9b0; background: linear-gradient(135deg, #fff, var(--green-soft)); }
 .glass-card--chosen > span { color: var(--green); }
 .glass-card--chosen p { color: #254f40; }
@@ -216,10 +217,10 @@ code { color: var(--cyan); }
 .healing-list { display: grid; gap: 8px; }
 .healing-card { padding: 13px; border: 1px solid #e9cf99; border-radius: 8px; background: var(--amber-soft); }
 .healing-card blockquote { margin: 10px 0; padding-left: 11px; border-left: 2px solid var(--red); color: #765858; font-size: 0.72rem; line-height: 1.5; }
-.steering-box { padding: 10px; border-radius: 6px; background: var(--cyan-soft); }
-.steering-box strong { color: var(--cyan); font-size: 0.56rem; text-transform: uppercase; letter-spacing: 0.09em; }
-.steering-box ul { margin: 6px 0 0; padding-left: 16px; color: var(--muted); font-size: 0.66rem; line-height: 1.5; }
-.steering-box p { margin: 5px 0 0; color: var(--muted); font-size: 0.66rem; }
+.steering-box { padding: 12px 13px; border: 2px solid #f0b429; border-left: 5px solid #ffc247; border-radius: 7px; background: #5c3a00; color: #fff8df; box-shadow: 0 5px 14px rgba(92, 58, 0, 0.16); }
+.steering-box strong { color: #ffd166; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; }
+.steering-box ul { margin: 8px 0 0; padding-left: 18px; color: #fff8df; font-size: 0.72rem; font-weight: 620; line-height: 1.55; }
+.steering-box p { margin: 7px 0 0; color: #fff8df; font-size: 0.72rem; font-weight: 620; line-height: 1.5; }
 .dataset-summary { padding: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
 .dataset-summary > div:first-child { display: flex; align-items: baseline; gap: 8px; }
 .dataset-summary > div > strong { color: var(--cyan); font-size: 1.35rem; }
