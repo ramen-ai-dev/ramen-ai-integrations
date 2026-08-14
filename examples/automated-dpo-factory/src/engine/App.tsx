@@ -1,19 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { demoConfig, scenarios } from "../shared/content";
 import type { DpoRecord, GovernedBlockedData, GovernedCompleteData, StatusData } from "../shared/schemas";
 import { ComparisonCards } from "./components/ComparisonCards";
 import { AttemptTrace, DatasetLab, GlassBreakCascade, HealingTrail } from "./components/DetailPanels";
 import { StatusStreamer } from "./components/StatusStreamer";
-import { TurnstileGate } from "./components/TurnstileGate";
-import {
-  deleteSession,
-  extractDpoRecords,
-  getPublicConfig,
-  getSession,
-  runLiveScenario,
-  type PublicConfig,
-  type SessionState,
-} from "./run";
+import { extractDpoRecords, runLiveScenario } from "./run";
 
 type Terminal = "idle" | "running" | "complete" | "blocked" | "error";
 type DetailTab = "attempts" | "healing" | "dataset";
@@ -32,15 +23,11 @@ const initialRun: RunState = { terminal: "idle", statuses: [] };
 export function App() {
   const [scenarioId, setScenarioId] = useState(scenarios[0]?.id ?? "");
   const [swapped, setSwapped] = useState(false);
-  const [session, setSession] = useState<SessionState>();
-  const [publicConfig, setPublicConfig] = useState<PublicConfig>();
-  const [configError, setConfigError] = useState<string>();
   const [runState, setRunState] = useState<RunState>(initialRun);
   const [records, setRecords] = useState<DpoRecord[]>([]);
   const [detailTab, setDetailTab] = useState<DetailTab>("attempts");
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>("compare");
   const controllerRef = useRef<AbortController | undefined>(undefined);
-  const suppressSessionRestoreRef = useRef(false);
 
   const scenario = useMemo(
     () => scenarios.find((item) => item.id === scenarioId) ?? scenarios[0],
@@ -48,40 +35,7 @@ export function App() {
   );
   const result = runState.complete ?? runState.blocked;
 
-  useEffect(() => {
-    if (publicConfig || configError) return;
-    let active = true;
-    getPublicConfig()
-      .then((config) => { if (active) setPublicConfig(config); })
-      .catch((error: unknown) => { if (active) setConfigError(error instanceof Error ? error.message : "Live configuration is unavailable"); });
-    return () => { active = false; };
-  }, [configError, publicConfig]);
-
-  useEffect(() => {
-    if (session || suppressSessionRestoreRef.current) return;
-    let active = true;
-    getSession()
-      .then((restored) => { if (active && restored) setSession(restored); })
-      .catch(() => { /* A failed status probe leaves the verification gate closed. */ });
-    return () => { active = false; };
-  }, [session]);
-
-  useEffect(() => {
-    if (!session) return;
-    const timer = window.setInterval(() => {
-      if (Date.parse(session.expiresAt) <= Date.now()) setSession(undefined);
-    }, 10_000);
-    return () => window.clearInterval(timer);
-  }, [session]);
-
   useEffect(() => () => controllerRef.current?.abort(), []);
-
-  const acceptSession = useCallback((next: SessionState) => {
-    suppressSessionRestoreRef.current = false;
-    setSession(next);
-    setRunState(initialRun);
-    setWorkspaceTab("compare");
-  }, []);
 
   const chooseScenario = (nextId: string) => {
     if (runState.terminal === "running") return;
@@ -100,7 +54,7 @@ export function App() {
   };
 
   const startRun = async () => {
-    if (!scenario || runState.terminal === "running" || !session) return;
+    if (!scenario || runState.terminal === "running") return;
 
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -155,16 +109,9 @@ export function App() {
     }
   };
 
-  const closeSession = async () => {
-    suppressSessionRestoreRef.current = true;
-    setSession(undefined);
-    resetRun();
-    try { await deleteSession(); } catch { /* Local state remains fail-closed; the cookie naturally expires. */ }
-  };
-
   if (!scenario) return <main className="fatal-state">No configured scenarios are available.</main>;
 
-  const canRun = runState.terminal !== "running" && Boolean(session);
+  const canRun = runState.terminal !== "running";
   const rejectedCount = result?.attempt_metadata.filter((item) => !item.allowed).length ?? 0;
   const terminalLabel = runState.terminal === "complete"
     ? "Approved"
@@ -205,7 +152,7 @@ export function App() {
         <aside className="control-rail" aria-label="Demo controls">
           <div className="rail-section live-pipeline">
             <span className="rail-label">Execution</span>
-            <div><span className="session-light session-light--live" /><strong>Live governed endpoint</strong></div>
+            <div><span className="status-light status-light--live" /><strong>Live governed endpoint</strong></div>
             <small>No fixture or expected result is bundled.</small>
           </div>
 
@@ -221,10 +168,6 @@ export function App() {
               ))}
             </div>
             <p className="scenario-summary">{scenario.summary}</p>
-          </div>
-
-          <div className="rail-section session-summary">
-            {session ? <><span className="session-light session-light--live" /><div><strong>Secure session</strong><small>{publicConfig?.burstLimit ?? 5} requests / {publicConfig?.burstWindowSeconds ?? 60}s</small></div><button type="button" onClick={closeSession}>End</button></> : <><span className="session-light" /><div><strong>Verification required</strong><small>Keys stay server-side</small></div></>}
           </div>
 
           <div className="rail-actions">
@@ -248,19 +191,15 @@ export function App() {
           {runState.error ? <div className="error-banner" role="alert"><strong>Run failed</strong><span>{runState.error}</span></div> : null}
 
           <div className="workspace-content">
-            {!session ? (
-              publicConfig ? <TurnstileGate config={publicConfig} onSession={acceptSession} /> : <div className="security-gate security-gate--loading"><p>{configError ?? "Loading secure session configuration…"}</p></div>
-            ) : null}
-
-            {session && workspaceTab === "compare" ? (
+            {workspaceTab === "compare" ? (
               <ComparisonCards scenario={scenario} swapped={swapped} onSwap={() => setSwapped((value) => !value)} />
             ) : null}
 
-            {session && workspaceTab === "outcome" ? (
+            {workspaceTab === "outcome" ? (
               result ? <GlassBreakCascade result={result} /> : <div className="workspace-empty"><span>Live L2 interception</span><h2>Run the governed comparison.</h2><p>The rejected attempt, policy steering, and verified output will appear here directly from the terminal event.</p><button className="button button--primary" type="button" disabled={!canRun} onClick={startRun}>Run now</button></div>
             ) : null}
 
-            {session && workspaceTab === "evidence" ? (
+            {workspaceTab === "evidence" ? (
               <section className="detail-section" aria-labelledby="details-heading">
                 <h2 id="details-heading" className="sr-only">Governance evidence</h2>
                 <div className="tabs" aria-label="Governance evidence views">

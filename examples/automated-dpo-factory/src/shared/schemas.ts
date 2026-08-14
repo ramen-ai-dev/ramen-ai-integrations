@@ -134,10 +134,7 @@ const governedErrorSchema = z.object({ code: z.string(), message: z.string(), ht
 export const blockedEnvelopeSchema = z.object({ success: z.literal(false), error: governedErrorSchema, data: governedBlockedDataSchema });
 export const errorEnvelopeSchema = z.object({ success: z.literal(false), error: governedErrorSchema, data: z.unknown().optional() });
 
-export const sessionRequestSchema = z.object({ turnstileToken: boundedText(4_096) }).strict();
 export const generateRequestSchema = z.object({ scenarioId: identifierSchema }).strict();
-export const sessionResponseSchema = z.object({ expiresAt: z.string().datetime() });
-export const publicConfigResponseSchema = z.object({ turnstileSiteKey: z.string().min(1), turnstileAction: z.string().min(1), burstLimit: z.number().int().positive(), burstWindowSeconds: z.union([z.literal(10), z.literal(60)]) });
 
 export type DemoConfig = z.infer<typeof demoConfigSchema>;
 export type DemoScenario = z.infer<typeof scenarioSchema>;

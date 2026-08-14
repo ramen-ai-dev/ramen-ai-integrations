@@ -6,9 +6,9 @@ const CONTENT_SECURITY_POLICY = [
   "object-src 'none'",
   "img-src 'self' data:",
   "style-src 'self'",
-  "script-src 'self' https://challenges.cloudflare.com",
-  "frame-src https://challenges.cloudflare.com",
-  "connect-src 'self' https://challenges.cloudflare.com",
+  "script-src 'self'",
+  "frame-src 'none'",
+  "connect-src 'self'",
 ].join("; ");
 
 export function applySecurityHeaders(response: Response, api = false): Response {

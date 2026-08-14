@@ -1,16 +1,11 @@
 import { buildScenarioPrompt } from "../shared/content";
-import {
-  publicConfigResponseSchema,
-  sessionResponseSchema,
-  type DemoScenario,
-  type DpoRecord,
-  type GovernedCompleteData,
-  type GovernedStreamEvent,
+import type {
+  DemoScenario,
+  DpoRecord,
+  GovernedCompleteData,
+  GovernedStreamEvent,
 } from "../shared/schemas";
 import { isEventStreamContentType, parseSseStream } from "../shared/sse";
-
-export type SessionState = { expiresAt: string };
-export type PublicConfig = { turnstileSiteKey: string; turnstileAction: string; burstLimit: number; burstWindowSeconds: number };
 
 async function errorMessage(response: Response): Promise<string> {
   try {
@@ -22,42 +17,12 @@ async function errorMessage(response: Response): Promise<string> {
   return `Request failed (${response.status})`;
 }
 
-export async function getPublicConfig(): Promise<PublicConfig> {
-  const response = await fetch("/api/demo/config", { credentials: "same-origin" });
-  if (!response.ok) throw new Error(await errorMessage(response));
-  return publicConfigResponseSchema.parse(await response.json());
-}
-
-export async function getSession(): Promise<SessionState | undefined> {
-  const response = await fetch("/api/demo/session", { credentials: "same-origin" });
-  if (response.status === 401) return undefined;
-  if (!response.ok) throw new Error(await errorMessage(response));
-  return sessionResponseSchema.parse(await response.json());
-}
-
-export async function createSession(turnstileToken: string): Promise<SessionState> {
-  const response = await fetch("/api/demo/session", {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ turnstileToken }),
-  });
-  if (!response.ok) throw new Error(await errorMessage(response));
-  return sessionResponseSchema.parse(await response.json());
-}
-
-export async function deleteSession(): Promise<void> {
-  const response = await fetch("/api/demo/session", { method: "DELETE", credentials: "same-origin" });
-  if (!response.ok) throw new Error(await errorMessage(response));
-}
-
 export async function* runLiveScenario(
   scenarioId: string,
   signal?: AbortSignal,
 ): AsyncGenerator<GovernedStreamEvent> {
   const response = await fetch("/api/demo/generate", {
     method: "POST",
-    credentials: "same-origin",
     headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
     body: JSON.stringify({ scenarioId }),
     signal,

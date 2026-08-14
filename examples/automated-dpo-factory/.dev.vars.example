@@ -1,8 +1,3 @@
 # Copy to .dev.vars. Never commit .dev.vars.
 RAMEN_API_KEY=replace-with-a-ramen-api-key
 OPENAI_API_KEY=replace-with-an-openai-api-key
-TURNSTILE_SECRET_KEY=replace-with-a-turnstile-secret-key
-SESSION_SIGNING_SECRET=replace-with-at-least-32-random-characters
-TURNSTILE_SITE_KEY=replace-with-a-turnstile-site-key
-TURNSTILE_EXPECTED_ACTION=foundry-demo
-SESSION_COOKIE_NAME=ramen_foundry_session

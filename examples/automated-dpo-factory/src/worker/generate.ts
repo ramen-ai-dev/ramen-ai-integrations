@@ -4,12 +4,11 @@ import {
   RamenClient,
   type GovernedStreamEvent,
 } from "@ramen-ai/node-core";
-import { demoConfig, getScenario, buildScenarioPrompt } from "../shared/content";
+import { buildScenarioPrompt, demoConfig, getScenario } from "../shared/content";
 import { generateRequestSchema } from "../shared/schemas";
 import { SECURITY_LIMITS } from "../shared/security";
 import type { Env } from "./env";
 import { applySecurityHeaders, errorResponse, readJsonBody, RequestBodyError } from "./http";
-import { readCookie, verifySessionToken } from "./session";
 
 const RAMEN_API_BASE_URL = "https://api.ramenai.dev";
 const encoder = new TextEncoder();
@@ -113,12 +112,6 @@ function governedEventStream(
 }
 
 export async function handleGenerate(request: Request, env: Env): Promise<Response> {
-  const token = readCookie(request, env.SESSION_COOKIE_NAME);
-  if (!token) return errorResponse(401, "SESSION_REQUIRED", "Complete verification before running the live demo");
-
-  const session = await verifySessionToken(token, env.SESSION_SIGNING_SECRET);
-  if (!session) return errorResponse(401, "SESSION_INVALID", "The demo session is invalid or expired");
-
   let input: unknown;
   try {
     input = await readJsonBody(request, SECURITY_LIMITS.maxRequestBytes);
@@ -132,11 +125,6 @@ export async function handleGenerate(request: Request, env: Env): Promise<Respon
   const scenario = getScenario(parsed.data.scenarioId);
   if (!scenario) return errorResponse(404, "SCENARIO_NOT_FOUND", "The requested scenario is not configured");
   if (!env.RAMEN_API_KEY || !env.OPENAI_API_KEY) return errorResponse(503, "DEMO_NOT_CONFIGURED", "The live demo credentials are not configured");
-
-  const rateLimit = await env.DEMO_RATE_LIMITER.limit({ key: session.session_id });
-  if (!rateLimit.success) {
-    return errorResponse(429, "BURST_LIMIT_EXCEEDED", "This session reached the five-request burst limit; retry after the 60-second window resets");
-  }
 
   const upstreamAbort = new AbortController();
   const client = new RamenClient({
