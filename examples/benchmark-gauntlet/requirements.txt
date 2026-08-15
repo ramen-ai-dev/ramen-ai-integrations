@@ -1,0 +1,2 @@
+ramen-ai-core>=0.3.1
+python-dotenv==1.2.2
