@@ -9,9 +9,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
 from ramen_ai import RamenClient
 
 BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(dotenv_path=BASE_DIR / ".env", override=False)
+
 LOG_PATH = BASE_DIR / "historical_logs.jsonl"
 REPORT_PATH = BASE_DIR / "AUDIT_REPORT.md"
 POLICY_UUID_PLACEHOLDER = "<YOUR_POLICY_UUID>"
