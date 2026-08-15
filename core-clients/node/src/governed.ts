@@ -24,6 +24,7 @@ const STATUS_STAGES = new Set<GovernedStatusStage>([
   "accepted",
   "generating",
   "evaluating",
+  "scrubbing",
   "regenerating",
 ]);
 

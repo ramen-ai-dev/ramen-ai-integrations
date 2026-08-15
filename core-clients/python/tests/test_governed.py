@@ -248,6 +248,32 @@ def test_stream_yields_status_heartbeat_and_complete_across_chunk_boundaries() -
     assert events[2].data.data.content == "approved output"
 
 
+def test_stream_accepts_scrubbing_status_with_violations() -> None:
+    complete = json.dumps({"success": True, "data": _complete_data()})
+    body = (
+        'event: status\ndata: {"stage":"scrubbing","attempt":0,"violations":1}\n\n'
+        f"event: complete\ndata: {complete}\n\n"
+    )
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={"Content-Type": "text/event-stream"},
+            content=body,
+        )
+
+    with _client(handler) as client:
+        events = list(
+            client.generate_governed_stream("prompt", policy_ids=[POLICY_ID])
+        )
+
+    assert isinstance(events[0], GovernedStatusEvent)
+    assert events[0].data.stage == "scrubbing"
+    assert events[0].data.attempt == 0
+    assert events[0].data.violations == 1
+    assert isinstance(events[1], GovernedCompleteEvent)
+
+
 def test_stream_blocked_throws_and_never_yields_terminal_event() -> None:
     blocked = json.dumps(
         {

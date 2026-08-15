@@ -32,7 +32,7 @@ from .governed_types import (
 )
 
 _GOVERNED_PATH = "/api/v1/generate/governed"
-_STATUS_STAGES = {"accepted", "generating", "evaluating", "regenerating"}
+_STATUS_STAGES = {"accepted", "generating", "evaluating", "scrubbing", "regenerating"}
 
 
 def generate_governed(

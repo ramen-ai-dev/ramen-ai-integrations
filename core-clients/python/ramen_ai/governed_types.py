@@ -16,6 +16,7 @@ GovernedStatusStage: TypeAlias = Literal[
     "accepted",
     "generating",
     "evaluating",
+    "scrubbing",
     "regenerating",
 ]
 

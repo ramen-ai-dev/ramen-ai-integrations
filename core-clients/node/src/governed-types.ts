@@ -93,6 +93,7 @@ export type GovernedStatusStage =
   | "accepted"
   | "generating"
   | "evaluating"
+  | "scrubbing"
   | "regenerating";
 
 export interface GovernedStatusEvent {

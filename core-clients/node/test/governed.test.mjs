@@ -234,6 +234,28 @@ test("stream yields multiline CRLF status, heartbeat, and complete across chunks
   assert.equal(events[2].data.data.content, "approved output");
 });
 
+test("stream accepts the scrubbing status stage with violations", async () => {
+  const complete = JSON.stringify({ success: true, data: completeData() });
+  const fetchImpl = async () => sseResponse([
+    'event: status\ndata: {"stage":"scrubbing","attempt":0,"violations":1}\n\n',
+    `event: complete\ndata: ${complete}\n\n`,
+  ]);
+
+  const events = [];
+  for await (const event of client(fetchImpl).generateGovernedStream(
+    "prompt",
+    { policyIds: [POLICY_ID] },
+  )) {
+    events.push(event);
+  }
+
+  assert.equal(events[0].event, "status");
+  assert.equal(events[0].data.stage, "scrubbing");
+  assert.equal(events[0].data.attempt, 0);
+  assert.equal(events[0].data.violations, 1);
+  assert.equal(events[1].event, "complete");
+});
+
 test("blocked SSE terminal throws and is never yielded", async () => {
   const blocked = JSON.stringify({
     success: false,
