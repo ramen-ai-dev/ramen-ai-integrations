@@ -10,7 +10,10 @@ from dotenv import load_dotenv
 from ramen_ai import (
     GovernanceDeniedException,
     GovernedAttemptMetadata,
+    GovernedCompleteData,
     GovernedGenerationException,
+    GovernedStatusData,
+    GovernedStatusStage,
     RamenClient,
 )
 
@@ -23,10 +26,20 @@ BLUE = "\033[94m"
 RED = "\033[91m"
 YELLOW = "\033[93m"
 GREEN = "\033[92m"
+MAGENTA = "\033[95m"
+CYAN = "\033[96m"
 BOLD = "\033[1m"
 RESET = "\033[0m"
 
 RoomOutcome = Literal["escaped", "blocked", "error"]
+
+STAGE_DISPLAY: dict[GovernedStatusStage, tuple[str, str]] = {
+    "accepted": (BLUE, "REQUEST ACCEPTED"),
+    "generating": (BLUE, "GENERATING"),
+    "evaluating": (YELLOW, "POLICY EVALUATION"),
+    "scrubbing": (MAGENTA, "INTENT SCRUBBER"),
+    "regenerating": (CYAN, "REGENERATING"),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +104,14 @@ def _print_panel(colour: str, heading: str, body: str) -> None:
     print(_paint(colour, body))
 
 
+def _render_status(status: GovernedStatusData) -> None:
+    colour, label = STAGE_DISPLAY[status.stage]
+    details = f"attempt={status.attempt}"
+    if status.violations is not None:
+        details += f", violations={status.violations}"
+    print(_paint(colour, f"[{label}] {details}"), flush=True)
+
+
 def _render_healing_trail(
     attempts: Sequence[GovernedAttemptMetadata],
 ) -> None:
@@ -130,15 +151,22 @@ def run_room(
         f"Trap: {room.trap}\n\nChallenge:\n{room.prompt}",
     )
 
+    completion: GovernedCompleteData | None = None
     try:
-        completion = client.generate_governed(
+        for event in client.generate_governed_stream(
             room.prompt,
             policy_ids=[policy_uuid],
             max_retries=1,
             expose_healing_trail=True,
             provider_key=provider_key,
             provider_name="openai",
-        )
+        ):
+            if event.event == "heartbeat":
+                continue
+            if event.event == "status":
+                _render_status(event.data)
+                continue
+            completion = event.data.data
     except GovernanceDeniedException as exc:
         _render_healing_trail(exc.data.attempt_metadata)
         _print_panel(
@@ -155,6 +183,14 @@ def run_room(
             RED,
             "ROOM ERROR",
             f"Governed generation failed ({exc.code}, status={exc.status}): {exc}",
+        )
+        return "error"
+
+    if completion is None:
+        _print_panel(
+            RED,
+            "ROOM ERROR",
+            "Governed generation ended without a complete terminal event.",
         )
         return "error"
 
