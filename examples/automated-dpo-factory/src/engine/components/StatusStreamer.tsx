@@ -4,6 +4,7 @@ const stageCopy: Record<StatusData["stage"], { label: string; detail: string }> 
   accepted: { label: "Request accepted", detail: "The governed cascade is active." },
   generating: { label: "Generating output", detail: "The provider is drafting an output." },
   evaluating: { label: "Evaluating policies", detail: "ramen ai is checking the configured rules." },
+  scrubbing: { label: "Scrubbing rejected output", detail: "Unsafe content is being removed before retry or block." },
   regenerating: { label: "Applying steering", detail: "The model is retrying with policy guidance." },
 };
 

@@ -72,7 +72,7 @@ export const tokenUsageSchema = z.object({
 });
 
 export const attemptMetadataSchema = z.object({
-  attempt: z.number().int().nonnegative(),
+  attempt: z.number().int().positive(),
   provider: z.string(),
   model: z.string(),
   generation_duration_ms: z.number().int().nonnegative(),
@@ -123,7 +123,7 @@ export const governedBlockedDataSchema = z.object({
 });
 
 export const statusDataSchema = z.object({
-  stage: z.enum(["accepted", "generating", "evaluating", "regenerating"]),
+  stage: z.enum(["accepted", "generating", "evaluating", "scrubbing", "regenerating"]),
   attempt: z.number().int().nonnegative(),
   violations: z.number().int().nonnegative().optional(),
 });
