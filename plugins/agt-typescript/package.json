@@ -32,7 +32,7 @@
     }
   },
   "devDependencies": {
-    "@microsoft/agent-governance-sdk": "^4.0.0",
+    "@microsoft/agent-governance-sdk": "5.0.0",
     "typescript": "^5.6.0",
     "tsx": "^4.19.0",
     "vitest": "^3.2.4"
@@ -41,7 +41,7 @@
     "node": ">=24"
   },
   "overrides": {
-    "js-yaml": "4.3.1",
-    "esbuild": "0.25.5"
+    "js-yaml": "5.3.0",
+    "postcss": "8.5.26"
   }
 }

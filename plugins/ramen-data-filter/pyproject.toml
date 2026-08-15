@@ -11,7 +11,7 @@ requires-python = ">=3.10"
 license = { text = "Proprietary" }
 dependencies = [
     "pandas==2.3.3",
-    "ramen-ai-core==0.2.2",
+    "ramen-ai-core==0.3.2",
 ]
 
 [project.optional-dependencies]

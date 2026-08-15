@@ -24245,6 +24245,7 @@ var STATUS_STAGES = /* @__PURE__ */ new Set([
   "accepted",
   "generating",
   "evaluating",
+  "scrubbing",
   "regenerating"
 ]);
 async function generateGoverned(config, prompt, options) {
@@ -24372,6 +24373,9 @@ function buildBody(prompt, options) {
     body.policy_ids = [...options.policyIds];
   if (options.bundleIds?.length)
     body.bundle_ids = [...options.bundleIds];
+  if (options.exposeHealingTrail !== void 0) {
+    body.expose_healing_trail = options.exposeHealingTrail;
+  }
   if (options.generation) {
     const { temperature, maxTokens } = options.generation;
     if (temperature !== void 0 && (!Number.isFinite(temperature) || temperature < 0 || temperature > 2)) {
@@ -24559,7 +24563,9 @@ function parseAttempts(value) {
       evaluation_duration_ms: integerField(attempt, "evaluation_duration_ms"),
       policies_evaluated: integerField(attempt, "policies_evaluated"),
       allowed: booleanField(attempt, "allowed"),
-      ...attempt.usage !== void 0 ? { usage: parseUsage(attempt.usage) } : {}
+      ...attempt.usage !== void 0 ? { usage: parseUsage(attempt.usage) } : {},
+      ...attempt.rejected_content !== void 0 ? { rejected_content: stringField(attempt, "rejected_content") } : {},
+      ...attempt.steering_rationale !== void 0 ? { steering_rationale: stringArrayField(attempt, "steering_rationale") } : {}
     };
   });
 }
