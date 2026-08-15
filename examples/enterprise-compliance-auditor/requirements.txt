@@ -1,0 +1,1 @@
+ramen-ai-core>=0.3.1
