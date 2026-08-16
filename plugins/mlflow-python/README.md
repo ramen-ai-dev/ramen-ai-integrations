@@ -131,41 +131,33 @@ need `OPENAI_API_KEY` set at all.
 
 ---
 
-## Wrapping a scikit-learn model
+## Quickstart
 
 ```python
-import mlflow
-import pandas as pd
-from sklearn.ensemble import GradientBoostingClassifier
-from ramen_mlflow import RamenGovernedModel
-
-# 1. Train as normal
-clf = GradientBoostingClassifier().fit(X_train, y_train)
-
-# 2. Wrap it
+from ramen_mlflow import GovernanceDeniedException, RamenGovernedModel
 governed = RamenGovernedModel(
-    bundle_ids=["ramen__eu_ai_act_baseline"],
-    inner_model=clf,
-    model_name="credit-risk-scorer-v3",   # recorded in the audit log
-    feature_names=["income", "age", "employment_years"],  # optional subset
+    policy_ids=["<POLICY_UUID>"],
+    inner_model=trained_model,
 )
-
-# 3. Log the governed model to the registry
-with mlflow.start_run():
-    info = mlflow.pyfunc.log_model(
-        name="credit-risk-governed",
-        python_model=governed,
-        input_example=X_train.head(),
-    )
-
-# 4. Serve it — governance travels with the model
-loaded = mlflow.pyfunc.load_model(info.model_uri)
-predictions = loaded.predict(X_test)   # raises on a BLOCKED verdict
+try:
+    predictions = governed.predict(None, X_test, params={"shap_values": shap_values.tolist()})
+except GovernanceDeniedException as exc:
+    print(exc.steering)
+    print(exc.receipt_verified)
 ```
 
-Register the logged model and every deployment of that version carries the
-governance boundary with it. There is no separate gateway to configure and no
-way to call the model without passing the check.
+> 🚀 **Want to see a live SHAP interception catching a proxy bias? Run our fully executable [Poisoned Pipeline Showcase script](../../examples/poisoned-pipeline/showcase_pipeline.py).**
+
+On macOS/Linux, from the repository root:
+
+```bash
+cd examples/poisoned-pipeline
+python3 -m venv .venv
+./.venv/bin/python -m pip install -r requirements.txt
+cp .env.example .env  # replace the credential placeholders before running
+./.venv/bin/python -m unittest test_showcase_pipeline.py
+./.venv/bin/python showcase_pipeline.py
+```
 
 ---
 
