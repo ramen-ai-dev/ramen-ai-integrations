@@ -1,5 +1,13 @@
 # We built a 94.2%-accurate hiring model whose decisions were dominated by postcode. Here is how we blocked its prediction at runtime.
 
+## API Key
+
+To run this showcase, you must mint a ramen-ai API key. We offer a **Free
+Starter Tier** (1,000 evaluations/month, BYOK). Mint your key at:
+**[https://ramenai.dev/pricing](https://ramenai.dev/pricing)**
+
+---
+
 ## The Business Goal
 
 This synthetic hiring-screening example demonstrates a problem that accuracy-only model validation can miss.
