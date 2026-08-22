@@ -6,7 +6,11 @@ To run this showcase, you must mint a ramen-ai API key. We offer a **Free
 Starter Tier** (1,000 evaluations/month, BYOK). Mint your key at:
 **[https://ramenai.dev/pricing](https://ramenai.dev/pricing)**
 
+## Dataset
+
 This example trains a deterministic XGBoost classifier on the public [Kaggle Pump Sensor Data](https://www.kaggle.com/datasets/nphantawee/pump-sensor-data), computes authentic TreeSHAP values from the runtime input, injects a deterministic sensor freeze, aggregates attribution by physical source, and evaluates the resulting operational authorization against the deployed ramen AI policy.
+
+## Policy
 
 Policy UUID: `5ae51a4f-46b8-4015-bee7-2c6cc9499561`
 
