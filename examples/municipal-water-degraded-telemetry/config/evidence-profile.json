@@ -1,0 +1,36 @@
+{
+  "action_profile_id": "municipal-water-dispatch-work-order-v1",
+  "corroboration": {
+    "common_mode_dimensions": [
+      "sensing_element",
+      "power",
+      "communications",
+      "calibration_process",
+      "derived_inputs",
+      "process_artifact"
+    ],
+    "qualification": "all_of"
+  },
+  "dataset_id": "kaggle:nphantawee/pump-sensor-data:v1",
+  "explainer": {
+    "feature_perturbation": "tree_path_dependent",
+    "implementation": "shap.TreeExplainer",
+    "output_space": "raw_margin",
+    "type": "TreeSHAP"
+  },
+  "health": {
+    "expected_cadence_seconds": 60,
+    "feature_window_coverage_required": 1.0,
+    "freeze_failure_consecutive_intervals": 3,
+    "health_profile_id": "demo-freeze-health-gate-v1",
+    "max_value_age_seconds": 120
+  },
+  "materiality": {
+    "comparator": "gte",
+    "threshold": 0.5
+  },
+  "profile_id": "demo.mwdta.kaggle-pump.xgb-treeshap.dispatch.v1",
+  "profile_version": "1.0.0",
+  "registry_scope": "integration_demo_local",
+  "schema": "ramen.mwdta.evidence-profile.v1"
+}

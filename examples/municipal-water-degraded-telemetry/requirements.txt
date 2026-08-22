@@ -1,0 +1,7 @@
+ramen-ai-core==0.3.2
+numpy==2.2.6
+pandas==2.3.3
+scikit-learn==1.6.1
+shap==0.52.0
+xgboost==3.3.0
+python-dotenv==1.2.2
