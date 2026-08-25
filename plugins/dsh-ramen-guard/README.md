@@ -95,6 +95,15 @@ can create side effects.
 - **Preserve defence in depth.** Allowed calls continue with `next()`, so the
   guard complements rather than bypasses downstream Cordis policies.
 
+### Core IT interception
+
+This illustrative terminal view shows `dsh-ramen-guard` denying a log-derived
+credential-exfiltration attempt before downstream dispatch.
+
+<p align="center">
+  <img src="assets/core-it-interception.png" alt="Illustrative dsh-ramen-guard Core IT interception of a log-derived credential-exfiltration attempt" width="840"/>
+</p>
+
 ---
 
 ## Can you bypass it?
