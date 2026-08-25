@@ -55,6 +55,10 @@ steering instruction that is auditable, reproducible, and legally defensible.
   <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/ramen-data-filter">
     <img src="https://img.shields.io/badge/ramen%20data%20filter-D97706?style=flat&logo=pandas&logoColor=white" alt="ramen data filter"/>
   </a>
+  &nbsp;
+  <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/ramen-deepseek-guard">
+    <img src="https://img.shields.io/badge/DeepSeek%20Harness-4D6BFE?style=flat&logo=deepseek&logoColor=white" alt="DeepSeek Harness"/>
+  </a>
 </p>
 
 ---
@@ -131,6 +135,7 @@ queue, or gateway not covered by the plugins below.
 | `cmcp-python` | cMCP + TRACE | [`plugins/cmcp-python/`](plugins/cmcp-python/) | cMCP tool-call policy adapter, plus a TRACE Trust Record exporter that maps V5 Ed25519 receipts onto the agentrust-io EAT profile. |
 | `mlflow-python` | MLflow / Databricks | [`plugins/mlflow-python/`](plugins/mlflow-python/) | `mlflow.pyfunc.PythonModel` wrapper enforcing algorithmic governance on classical ML. Evaluates feature arrays and SHAP attributions for proxy bias pre-inference; halts serving on `[BLOCKED]`. |
 | `ramen-data-filter` | Pandas / CSV | [`plugins/ramen-data-filter/`](plugins/ramen-data-filter/) | Dual-mode row filtration for RAG ingestion and MLOps datasets. Strictly excludes blocked records or semantically imputes steering-approved columns. |
+| `ramen-deepseek-guard` | DeepSeek Harness | [`plugins/ramen-deepseek-guard/`](plugins/ramen-deepseek-guard/) | Unofficial Cordis plugin that evaluates `tools/pre-execute` intent through ramen-ai and requires a verified receipt before delegating tool execution. |
 
 ---
 
@@ -188,8 +193,18 @@ Full bundle and policy reference: [https://ramenai.dev/pricing](https://ramenai.
 │   ├── mcp-proxy/           # Universal MCP stdio transport interceptor
 │   ├── cmcp-python/         # cMCP policy adapter + TRACE record exporter
 │   ├── mlflow-python/       # MLflow pyfunc algorithmic governance wrapper
-│   └── ramen-data-filter/   # Pandas/CSV filtration for RAG and MLOps datasets
+│   ├── ramen-data-filter/   # Pandas/CSV filtration for RAG and MLOps datasets
+│   └── ramen-deepseek-guard/ # DeepSeek Harness pre-execution Cordis guard
 ├── .github/
 │   └── workflows/           # CI workflows
 └── RED_TEAM_GUIDE.md        # Zero-day evasion vectors and challenge guide
 ```
+
+---
+
+## Adding integration logos
+
+When adding a platform integration, update the standard ecosystem row in the
+home README, every plugin README, and every translated companion. See
+**[Adding Integration Logos](docs/adding-integration-logos.md)** for branding,
+internal-link, self-badge, asset, disclosure, and validation requirements.
