@@ -1,4 +1,4 @@
-# ramen-ai DeepSeek Harness Guard
+# dsh-ramen-guard
 
 [English](README.md) | 中文
 
@@ -11,12 +11,19 @@
   <img src="../../assets/ramen-logo.png" alt="ramen-ai" width="100"/>
 </p>
 
-这是一个故障关闭（fail-closed）的
+<p align="center"><strong>在意图变成行动之前，保护 DeepSeek Harness 工具执行。</strong></p>
+
+`dsh-ramen-guard` 是一个故障关闭（fail-closed）的
 [Cordis](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/cordis-primer.zh.md)
 插件。它会在 DeepSeek Harness 工具执行之前，通过 ramen-ai 语义防火墙评估工具调用。
 插件拦截官方 `tools/pre-execute` waterfall，将已解析的工具名称和参数交给
 `@ramen-ai/node-core`，并且只有在 verdict 允许且 Ed25519 收据已在本地验证后，
 才会继续执行。
+
+DeepSeek Harness 可以赋予自主代理真实的 shell、代码、数据和 API 操作能力。
+本插件在模型自身推理之外增加一道独立的语义策略门禁。在默认的强制执行模式中，
+违反策略的调用会在产生副作用前被阻止；允许的调用只有携带与已评估工具意图绑定、
+并经过本地验证的收据，才会继续进入后续 Cordis guard 链。审计模式明确为非阻止模式。
 
 需要 **Node.js 24 或更高版本**。已针对 DeepSeek Harness
 `@deepseek-ai/cordis@4.0.1` 和 `@deepseek-ai/dsh-tools@0.1.1-rc.2` 测试。
@@ -58,6 +65,25 @@
   &nbsp;
   <img src="https://img.shields.io/badge/DeepSeek%20Harness-4D6BFE?style=flat&logo=deepseek&logoColor=white" alt="DeepSeek Harness"/>
 </p>
+
+---
+
+## 为什么值得使用？
+
+具备真实操作能力的代理，可能把一条被操纵的指令变成 shell 命令、数据库变更、
+云资源操作或支付请求。工具一旦执行，仅记录日志已经太晚。`dsh-ramen-guard`
+把策略判断放在最后一个仍可安全阻止动作的时刻：DeepSeek Harness 已解析工具调用，
+但工具函数尚未产生副作用。
+
+- **在执行前阻止。** 对已解析的 `{ tool, arguments }` 意图执行策略，而不是事后补救。
+- **使用语义策略，而不只是字符串匹配。** 当所选 policy 或 bundle scope 覆盖相关风险时，
+  配置的 ramen-ai 策略可以识别编码 payload、委婉表达或间接措辞。
+- **边界不可用时故障关闭。** 在强制执行模式中，超时、格式错误的响应、取消或无法验证的
+  收据都不能静默授权动作。
+- **要求执行具备加密证据。** allow 响应只有包含与已评估意图绑定、并经过本地验证的
+  Ed25519 收据，才能到达工具；边界故障则使用固定的 unavailable 原因拒绝调用。
+- **保留纵深防御。** 允许的调用通过 `next()` 继续，因此本 guard 会补充而不是绕过
+  后续 Cordis 策略。
 
 ---
 
@@ -104,18 +130,18 @@ export RAMEN_API_KEY=ramen_ak_...
 DeepSeek Harness 会把 `dsh plugin` 的包管理操作转发到所选 profile：
 
 ```bash
-dsh plugin --profile web add @ramen-ai/deepseek-guard@0.1.0
+dsh plugin --profile web add @ramen-ai/dsh-ramen-guard@0.1.0
 ```
 
 ### 从本仓库安装
 
 ```bash
-cd plugins/ramen-deepseek-guard
+cd plugins/dsh-ramen-guard
 npm install
 npm run build
 npm pack
 
-dsh plugin --profile web add /absolute/path/to/ramen-ai-deepseek-guard-0.1.0.tgz
+dsh plugin --profile web add /absolute/path/to/ramen-ai-dsh-ramen-guard-0.1.0.tgz
 ```
 
 如果你运行的不是 `web` profile，请替换为实际 profile 名称。
@@ -129,8 +155,8 @@ dsh plugin --profile web add /absolute/path/to/ramen-ai-deepseek-guard-0.1.0.tgz
 
 ```yaml
 - insert:
-    - id: ramen-deepseek-guard
-      name: '@ramen-ai/deepseek-guard'
+    - id: dsh-ramen-guard
+      name: '@ramen-ai/dsh-ramen-guard'
       config:
         apiKey: !!js process.env.RAMEN_API_KEY
         bundleIds: ['ramen__shield_core_it']
@@ -163,8 +189,8 @@ ramen ai execution boundary unavailable
 
 ```yaml
 - insert:
-    - id: ramen-deepseek-guard-audit
-      name: '@ramen-ai/deepseek-guard'
+    - id: dsh-ramen-guard-audit
+      name: '@ramen-ai/dsh-ramen-guard'
       config:
         apiKey: !!js process.env.RAMEN_API_KEY
         policyIds: ['<POLICY_UUID>']
@@ -186,7 +212,7 @@ Harness 中的其他 guard 仍然可以拒绝调用。
 
 1. 导出 `RAMEN_API_KEY`。
 2. 把 package 安装到 DeepSeek Harness profile。
-3. 添加上方 `ramen-deepseek-guard` insert。
+3. 添加上方 `dsh-ramen-guard` insert。
 4. 重启 profile；如需检查组合后的配置，可运行：
 
 ```bash
@@ -196,6 +222,39 @@ dsh web
 
 插件激活后，所有进入官方 `tools/pre-execute` waterfall 的工具调用，
 都会在工具函数运行前完成评估。
+
+---
+
+## 使用场景示例
+
+### 保护编码与运维代理
+
+在 shell、文件系统、数据库、Kubernetes、云平台或部署工具前增加策略边界。
+例如，可在底层工具运行前拒绝破坏性命令、不安全的生产环境变更或权限提升。
+
+### 防止密钥和数据外泄
+
+评估已经解析到工具调用中的目标地址和 payload。策略可以拒绝把 API key、凭据、
+源代码、客户记录或其他敏感数据发送到未批准端点的尝试。
+
+### 保护财务与管理工作流
+
+在转账、支付、账户管理或访问控制工具执行前，要求 ramen-ai 返回允许 verdict。
+当代理能够执行具有真实资金或权限后果的动作时，这道边界尤其重要。
+
+### 为高风险工作流增加可验证控制
+
+对每个特权工具调用应用标准 ramen-ai bundle 或显式 policy ID。allow 响应只有在其收据
+已在本地针对所评估的工具意图完成验证后，才能到达工具。
+
+### 首日不阻断，逐步上线策略
+
+先使用 `mode: audit` 观察 verdict 并调优策略，同时让所有调用继续进入 Cordis 链。
+准备好启用真实边界后，再显式切换到 `mode: enforce`。审计模式本身永远不会阻止调用。
+
+> [!NOTE]
+> 本插件只评估进入 `tools/pre-execute` 的已解析工具名称和参数。它不会直接扫描源文档
+> 或 prompt，也无法治理 Harness 工具 pipeline 之外执行的动作。
 
 ---
 
@@ -238,7 +297,7 @@ DeepSeek 模型提出工具调用
 
 | Export | 说明 |
 |---|---|
-| `name` | 稳定的插件显示名称：`ramen-deepseek-guard`。 |
+| `name` | 稳定的插件显示名称：`dsh-ramen-guard`。 |
 | `inject` | 要求 Harness `tools` service。 |
 | `Config` | Cordis loader 使用的 Schemastery validator。 |
 | `apply(ctx, config)` | 注册 `tools/pre-execute` listener 并创建 `RamenClient`。 |
@@ -270,7 +329,7 @@ SDK 还会收到 `context.tool_name`，用于策略和审计上下文。
 ## 运行测试
 
 ```bash
-cd plugins/ramen-deepseek-guard
+cd plugins/dsh-ramen-guard
 npm install
 npm run typecheck
 npm test

@@ -1,7 +1,7 @@
 {
-  "name": "@ramen-ai/deepseek-guard",
+  "name": "@ramen-ai/dsh-ramen-guard",
   "version": "0.1.0",
-  "description": "Fail-closed ramen-ai semantic firewall boundary for DeepSeek Harness tool execution.",
+  "description": "Fail-closed semantic policy guard for secure DeepSeek Harness tool execution.",
   "license": "MIT",
   "type": "module",
   "main": "dist/index.js",

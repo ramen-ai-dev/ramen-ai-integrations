@@ -3,7 +3,7 @@ import type { PreToolDecision } from "@deepseek-ai/dsh-tools";
 import z from "@deepseek-ai/schemastery";
 import { RamenClient, type ComplianceVerdict, type EvaluateOptions } from "@ramen-ai/node-core";
 
-export const name = "ramen-deepseek-guard";
+export const name = "dsh-ramen-guard";
 export const inject = ["tools"];
 
 export const BOUNDARY_UNAVAILABLE_REASON = "ramen ai execution boundary unavailable";
@@ -87,10 +87,10 @@ async function evaluateWithCancellation(
 /** Install the ramen-ai semantic firewall before DeepSeek Harness tool dispatch. */
 export function apply(ctx: Context, config: Config): void {
   if (!config.apiKey) {
-    throw new Error("ramen-deepseek-guard: apiKey is required");
+    throw new Error("dsh-ramen-guard: apiKey is required");
   }
   if (!config.bundleIds?.length && !config.policyIds?.length) {
-    throw new Error("ramen-deepseek-guard: provide at least one policyId or bundleId");
+    throw new Error("dsh-ramen-guard: provide at least one policyId or bundleId");
   }
 
   const mode = config.mode ?? "enforce";
@@ -116,7 +116,7 @@ export function apply(ctx: Context, config: Config): void {
     } catch (error) {
       if (mode === "audit") {
         ctx.logger.warn(
-          `ramen-deepseek-guard audit: evaluation unavailable for tool "${exec.name}": ${errorMessage(error)}`,
+          `dsh-ramen-guard audit: evaluation unavailable for tool "${exec.name}": ${errorMessage(error)}`,
         );
         return next();
       }
@@ -125,7 +125,7 @@ export function apply(ctx: Context, config: Config): void {
 
     if (mode === "audit") {
       ctx.logger.info(
-        `ramen-deepseek-guard audit: tool "${exec.name}" verdict=${verdict.allowed ? "allow" : "deny"} receipt=${hasVerifiedReceipt(verdict) ? "verified" : "unverified"}`,
+        `dsh-ramen-guard audit: tool "${exec.name}" verdict=${verdict.allowed ? "allow" : "deny"} receipt=${hasVerifiedReceipt(verdict) ? "verified" : "unverified"}`,
       );
       return next();
     }

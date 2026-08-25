@@ -31,7 +31,7 @@ Prefer a Shields.io badge using `style=flat`, a descriptive `alt` value, and
 For example:
 
 ```html
-<a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/ramen-deepseek-guard">
+<a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/dsh-ramen-guard">
   <img src="https://img.shields.io/badge/DeepSeek%20Harness-4D6BFE?style=flat&logo=deepseek&logoColor=white" alt="DeepSeek Harness"/>
 </a>
 ```
@@ -70,11 +70,13 @@ Plugin-specific screenshots and demonstrations belong under that plugin's own
 
 ## Community integration disclosures
 
-Follow the host platform's current disclosure policy. DeepSeek Harness requires
-community projects to identify themselves prominently as unofficial. Its
-plugin category also states that community visibility does not represent
-DeepSeek review or endorsement. The English and Chinese DeepSeek Guard READMEs
-therefore carry matched notices at the top and link to
+Follow the host platform's current disclosure and listing policies. DeepSeek
+Harness requires community projects to identify themselves prominently as
+unofficial and uses the discussion-title format `DSH | Project Name | One-line
+description`. Its plugin category also states that community visibility does
+not represent DeepSeek review or endorsement. The English and Chinese
+`dsh-ramen-guard` READMEs therefore carry matched notices at the top and link
+to
 [DeepSeek Harness Discussion #2004](https://github.com/deepseek-ai/deepseek-harness/discussions/2004).
 
 ## Update checklist

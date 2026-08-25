@@ -1,4 +1,4 @@
-# ramen-ai DeepSeek Harness Guard
+# dsh-ramen-guard
 
 English | [中文](README.zh.md)
 
@@ -12,12 +12,22 @@ English | [中文](README.zh.md)
   <img src="../../assets/ramen-logo.png" alt="ramen-ai" width="100"/>
 </p>
 
-A fail-closed [Cordis](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/cordis-primer.md)
+<p align="center"><strong>Secure DeepSeek Harness at the moment intent becomes action.</strong></p>
+
+`dsh-ramen-guard` is a fail-closed
+[Cordis](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/cordis-primer.md)
 plugin that evaluates DeepSeek Harness tool calls against the ramen-ai semantic
 firewall before execution. It intercepts the official `tools/pre-execute`
 waterfall, submits the resolved tool name and arguments through
 `@ramen-ai/node-core`, and permits execution only after an allowed verdict with
 a locally verified Ed25519 receipt.
+
+DeepSeek Harness can give autonomous agents real shell, code, data, and API
+capabilities. This plugin adds an independent semantic policy gate outside the
+model's own reasoning. In the default enforcement mode, policy-violating calls
+are stopped before side effects, while an approved call continues through the
+remaining Cordis guard chain only with a locally verified receipt bound to the
+evaluated tool intent. Audit mode is explicitly non-blocking.
 
 Requires **Node.js 24 or newer** and is tested against DeepSeek Harness
 `@deepseek-ai/cordis@4.0.1` and `@deepseek-ai/dsh-tools@0.1.1-rc.2`.
@@ -59,6 +69,31 @@ Requires **Node.js 24 or newer** and is tested against DeepSeek Harness
   &nbsp;
   <img src="https://img.shields.io/badge/DeepSeek%20Harness-4D6BFE?style=flat&logo=deepseek&logoColor=white" alt="DeepSeek Harness"/>
 </p>
+
+---
+
+## Why it matters
+
+A capable agent can turn one manipulated instruction into a shell command,
+database mutation, cloud change, or payment request. Once the tool runs, a log
+entry is too late. `dsh-ramen-guard` moves the decision to the last responsible
+moment: after DeepSeek Harness resolves the tool call, but before the tool body
+can create side effects.
+
+- **Block before execution.** Enforce policy on the resolved `{ tool,
+  arguments }` intent rather than trying to repair damage afterward.
+- **Apply semantic policy, not just string matching.** Configured ramen-ai
+  policies can identify encoded payloads, euphemisms, or indirect wording when
+  those risks are covered by the selected policy or bundle scope.
+- **Fail closed when the boundary is unavailable.** In enforcement mode, a
+  timeout, malformed response, cancellation, or unverifiable receipt cannot
+  silently authorize the action.
+- **Require cryptographic evidence for execution.** An allow response cannot
+  reach the tool unless it includes an Ed25519 receipt verified locally against
+  the evaluated intent; boundary failures deny with the fixed unavailable
+  reason.
+- **Preserve defence in depth.** Allowed calls continue with `next()`, so the
+  guard complements rather than bypasses downstream Cordis policies.
 
 ---
 
@@ -113,18 +148,18 @@ DeepSeek Harness forwards `dsh plugin` package operations to the selected
 profile's package manager:
 
 ```bash
-dsh plugin --profile web add @ramen-ai/deepseek-guard@0.1.0
+dsh plugin --profile web add @ramen-ai/dsh-ramen-guard@0.1.0
 ```
 
 ### From this repository
 
 ```bash
-cd plugins/ramen-deepseek-guard
+cd plugins/dsh-ramen-guard
 npm install
 npm run build
 npm pack
 
-dsh plugin --profile web add /absolute/path/to/ramen-ai-deepseek-guard-0.1.0.tgz
+dsh plugin --profile web add /absolute/path/to/ramen-ai-dsh-ramen-guard-0.1.0.tgz
 ```
 
 Use the profile you actually run instead of `web` where appropriate.
@@ -138,8 +173,8 @@ Add the plugin to the selected profile's `cordis.patch.yml`, normally under
 
 ```yaml
 - insert:
-    - id: ramen-deepseek-guard
-      name: '@ramen-ai/deepseek-guard'
+    - id: dsh-ramen-guard
+      name: '@ramen-ai/dsh-ramen-guard'
       config:
         apiKey: !!js process.env.RAMEN_API_KEY
         bundleIds: ['ramen__shield_core_it']
@@ -175,8 +210,8 @@ making ramen-ai an enforcement gate:
 
 ```yaml
 - insert:
-    - id: ramen-deepseek-guard-audit
-      name: '@ramen-ai/deepseek-guard'
+    - id: dsh-ramen-guard-audit
+      name: '@ramen-ai/dsh-ramen-guard'
       config:
         apiKey: !!js process.env.RAMEN_API_KEY
         policyIds: ['<POLICY_UUID>']
@@ -201,7 +236,7 @@ provider credentials into tool arguments or source-controlled configuration.
 
 1. Export `RAMEN_API_KEY`.
 2. Install the package into the DeepSeek Harness profile.
-3. Add the `ramen-deepseek-guard` insert shown above.
+3. Add the `dsh-ramen-guard` insert shown above.
 4. Restart the profile and inspect the composed configuration if needed:
 
 ```bash
@@ -211,6 +246,45 @@ dsh web
 
 After activation, every tool call that reaches the official
 `tools/pre-execute` waterfall is evaluated before the tool body runs.
+
+---
+
+## Example use cases
+
+### Secure coding and operations agents
+
+Place a policy boundary in front of shell, filesystem, database, Kubernetes,
+cloud, or deployment tools. For example, deny destructive commands, unsafe
+production changes, or privilege escalation before the underlying tool runs.
+
+### Prevent secret and data exfiltration
+
+Evaluate the destination and payload already resolved into a tool call. Policies
+can deny attempts to send API keys, credentials, source code, customer records,
+or other sensitive data to an unapproved endpoint.
+
+### Guard financial and administrative workflows
+
+Require an allowed ramen-ai verdict before transfer, payment, account-management,
+or access-control tools execute. This is useful when an agent can take actions
+with real monetary or permission consequences.
+
+### Add verifiable controls to high-risk workflows
+
+Apply a standard ramen-ai bundle or explicit policy IDs to each privileged tool
+call. An allow response can reach the tool only when its receipt verifies
+locally against the evaluated tool intent.
+
+### Roll out policy without blocking on day one
+
+Start with `mode: audit` to observe verdicts and tune policies while every call
+continues through the Cordis chain. Switch explicitly to `mode: enforce` when
+you are ready for a fail-closed boundary. Audit mode itself never blocks.
+
+> [!NOTE]
+> The plugin evaluates the resolved tool name and arguments for calls that reach
+> `tools/pre-execute`. It does not scan source documents or prompts directly,
+> and it cannot govern actions performed outside the Harness tool pipeline.
 
 ---
 
@@ -254,7 +328,7 @@ in enforcement mode.
 
 | Export | Description |
 |---|---|
-| `name` | Stable plugin display name: `ramen-deepseek-guard`. |
+| `name` | Stable plugin display name: `dsh-ramen-guard`. |
 | `inject` | Requires the Harness `tools` service. |
 | `Config` | Schemastery validator consumed by the Cordis loader. |
 | `apply(ctx, config)` | Registers the `tools/pre-execute` listener and creates the `RamenClient`. |
@@ -286,7 +360,7 @@ The SDK also receives `context.tool_name` for policy/audit context.
 ## Running the tests
 
 ```bash
-cd plugins/ramen-deepseek-guard
+cd plugins/dsh-ramen-guard
 npm install
 npm run typecheck
 npm test

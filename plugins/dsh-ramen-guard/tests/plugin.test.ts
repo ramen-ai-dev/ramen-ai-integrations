@@ -134,7 +134,7 @@ describe("configuration", () => {
   });
 });
 
-describe("ramen-deepseek-guard", () => {
+describe("dsh-ramen-guard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
