@@ -23,7 +23,7 @@ Before adding a badge, confirm from the platform's official source:
 - the official integration name;
 - the brand colour;
 - an approved Simple Icons token or licensed artwork;
-- the internal plugin directory; and
+- the canonical ramen-ai project location; and
 - any trademark, attribution, or community-disclosure requirements.
 
 Prefer a Shields.io badge using `style=flat`, a descriptive `alt` value, and
@@ -31,21 +31,24 @@ Prefer a Shields.io badge using `style=flat`, a descriptive `alt` value, and
 For example:
 
 ```html
-<a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/dsh-ramen-guard">
+<a href="https://github.com/ramen-ai-dev/dsh-ramen-guard">
   <img src="https://img.shields.io/badge/DeepSeek%20Harness-4D6BFE?style=flat&logo=deepseek&logoColor=white" alt="DeepSeek Harness"/>
 </a>
 ```
 
-Badge click targets must point to plugin directories in this repository.
-External platform links belong in README body text, not in the ecosystem row.
+Badge click targets must point to the integration's canonical project location:
+a plugin directory in this repository or, for an extracted integration, its
+standalone ramen-ai repository. External platform links belong in README body
+text, not in the ecosystem row.
 
-## The current plugin's badge
+## Standalone integration badges
 
-A plugin README may show its own badge without an `<a>` wrapper because the
-reader is already in that plugin directory. Every other README must link that
-badge to the plugin directory.
+For integrations maintained in a standalone repository, every README in this
+repository links the badge to that standalone repository. The standalone
+integration README may show its own badge without an `<a>` wrapper because the
+reader is already at its destination.
 
-For example, the DeepSeek Harness README uses:
+For example, the standalone DeepSeek Harness repository uses:
 
 ```html
 <img src="https://img.shields.io/badge/DeepSeek%20Harness-4D6BFE?style=flat&logo=deepseek&logoColor=white" alt="DeepSeek Harness"/>
@@ -87,9 +90,10 @@ For every new integration:
 - [ ] Add the badge to every `plugins/**/README*.md` file.
 - [ ] Keep the complete badge sequence identical.
 - [ ] Leave only each plugin's own badge unlinked where that convention is used.
-- [ ] Add the plugin to the root integration table and repository tree.
+- [ ] Add the integration to the root integration table, using its canonical repository destination.
+- [ ] Add the plugin to the repository tree only when it remains in this monorepo.
 - [ ] Update every translated README companion.
 - [ ] Verify all relative images and internal links resolve.
 - [ ] Verify each README contains exactly one badge for the integration.
-- [ ] Verify badge click targets do not point to third-party repositories.
+- [ ] Verify badge click targets use the canonical ramen-ai repository or monorepo plugin path.
 - [ ] Record the official artwork source, brand colour, and licensing basis.
