@@ -6,6 +6,8 @@
 
 <p align="center"><strong>The deterministic execution boundary for AI agents.</strong></p>
 
+<p align="center"><sub>Build governed LangGraph workflows with <a href="https://github.com/ramen-ai-dev/ramen-foundry">ramen-foundry</a>.</sub></p>
+
 ---
 
 ## The Problem
