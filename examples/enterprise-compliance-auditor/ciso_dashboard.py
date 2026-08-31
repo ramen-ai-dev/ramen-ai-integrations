@@ -26,7 +26,8 @@ DEFAULT_BUNDLE_ID = "ramen__shield_core_it"
 POLICY_UUID_PLACEHOLDER = "<YOUR_POLICY_UUID>"
 EXPECTED_LOG_COUNT = 1_000
 EXPECTED_MALICIOUS_COUNT = 50
-DEFAULT_MAX_WORKERS = 20
+DEFAULT_MAX_WORKERS = 5
+DEFAULT_MAX_EVALUATIONS = 200
 
 
 @dataclass(frozen=True)
@@ -339,6 +340,19 @@ def _max_workers() -> int:
     return workers
 
 
+def _max_evaluations() -> int:
+    raw_value = os.environ.get("CISO_MAX_EVALUATIONS", str(DEFAULT_MAX_EVALUATIONS))
+    try:
+        evaluations = int(raw_value)
+    except ValueError as exc:
+        raise ValueError("CISO_MAX_EVALUATIONS must be an integer.") from exc
+    if not 1 <= evaluations <= EXPECTED_LOG_COUNT:
+        raise ValueError(
+            f"CISO_MAX_EVALUATIONS must be between 1 and {EXPECTED_LOG_COUNT}."
+        )
+    return evaluations
+
+
 def main() -> int:
     load_dotenv(dotenv_path=BASE_DIR / ".env", override=False)
     api_key = os.environ.get("RAMEN_API_KEY", "").strip()
@@ -348,6 +362,8 @@ def main() -> int:
 
     try:
         tool_calls = load_tool_calls()
+        max_evaluations = _max_evaluations()
+        tool_calls = tool_calls[:max_evaluations]
         max_workers = _max_workers()
     except (OSError, ValueError) as exc:
         print(f"Unable to start CISO dashboard: {exc}", file=sys.stderr)

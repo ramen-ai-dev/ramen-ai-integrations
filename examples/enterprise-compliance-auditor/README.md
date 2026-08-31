@@ -5,7 +5,7 @@ A synthetic enterprise-security demonstration of concurrent ramen-ai compliance 
 This directory contains two related workflows:
 
 1. **Historical compliance audit** — evaluates 20 fixed historical assistant outputs against one configured policy and writes a Markdown evidence report.
-2. **CISO Threat Matrix** — evaluates 1,000 simulated agent tool calls against the `ramen__shield_core_it` bundle, or a configured proxy policy, while rendering live interception telemetry in the terminal.
+2. **CISO Threat Matrix** — draws from 1,000 simulated agent tool calls and evaluates 200 by default against the `ramen__shield_core_it` bundle, or a configured proxy policy, while rendering live interception telemetry in the terminal.
 
 Both workflows use the public `ramen-ai-core` Python SDK. They do not construct API requests, authentication headers, receipt payloads, or cryptographic verification logic themselves.
 
@@ -13,7 +13,7 @@ Both workflows use the public `ramen-ai-core` Python SDK. They do not construct 
 
 A live run requires a ramen-ai API key. Account and tier information is available at [ramenai.dev/pricing](https://ramenai.dev/pricing).
 
-The CISO dashboard submits **1,000 live evaluations**. Confirm account quota, rate limits, and provider configuration before running it. The scripts currently pass `RAMEN_API_KEY` but do not forward a per-request BYOK provider key; use an account or configured proxy policy that supports this evaluation path.
+The CISO dashboard submits **200 live evaluations through five concurrent workers by default**. These live-demonstration defaults reduce the likelihood of `429 Too Many Requests` responses from upstream LLM providers. Confirm account quota, rate limits, and provider configuration before increasing them. The scripts currently pass `RAMEN_API_KEY` but do not forward a per-request BYOK provider key; use an account or configured proxy policy that supports this evaluation path.
 
 Never commit `.env`, API keys, provider credentials, receipts, or customer log data.
 
@@ -43,7 +43,7 @@ The malicious strings are inert test data. This example sends them to the evalua
 
 The fixture labels describe the synthetic scenario; they do not control the ramen verdict. A record marked `malicious: true` is not automatically counted as blocked, and a record marked benign is not automatically counted as allowed.
 
-For each record, the application:
+For each record selected for the configured run, the application:
 
 1. Sends the exact `payload` string to `RamenClient.evaluate_compliance()`.
 2. Supplies the log ID, timestamp, source, and tool name as audit context.
@@ -68,11 +68,21 @@ python3 -m venv .venv
 cp .env.example .env
 ```
 
-Open `.env` and set local credentials and policy configuration:
+Open `.env` and set local credentials and policy configuration. The template groups API keys, policy scope, and live-demonstration limits separately:
 
 ```dotenv
+# API keys
 RAMEN_API_KEY="ramen_ak_..."
+# Reserved for workflows that explicitly forward BYOK credentials; this demo does not.
+OPENAI_API_KEY="sk-..."
+
+# Policy scope
+RAMEN_BUNDLE_ID="ramen__shield_core_it"
 RAMEN_POLICY_UUID="0d5ed2af-5e98-4a8c-92c3-dea26c07bf9a"
+
+# Live demonstration limits
+CISO_MAX_WORKERS="5"
+CISO_MAX_EVALUATIONS="200"
 ```
 
 Configuration behavior differs slightly between the two workflows:
@@ -80,8 +90,10 @@ Configuration behavior differs slightly between the two workflows:
 | Variable | Historical audit | CISO dashboard |
 |---|---|---|
 | `RAMEN_API_KEY` | Required | Required |
+| `OPENAI_API_KEY` | Not used | Reserved placeholder; not forwarded by this demo |
 | `RAMEN_POLICY_UUID` | Required | Optional override |
-| `CISO_MAX_WORKERS` | Not used | Optional; defaults to `20`, valid range `1`–`128` |
+| `CISO_MAX_WORKERS` | Not used | Optional; defaults to `5`, valid range `1`–`128` |
+| `CISO_MAX_EVALUATIONS` | Not used | Optional; defaults to `200`, valid range `1`–`1,000` |
 
 When `RAMEN_POLICY_UUID` is set, the dashboard evaluates against that configured proxy policy. When it is absent or still contains `<YOUR_POLICY_UUID>`, the dashboard evaluates against `ramen__shield_core_it`.
 
@@ -121,25 +133,25 @@ The generated corpus is checked in as `ciso_logs.jsonl`. To reproduce it determi
 ./.venv/bin/python generate_ciso_logs.py
 ```
 
-Run the live dashboard:
+Run the live dashboard with the rate-limit-conscious defaults:
 
 ```bash
 ./.venv/bin/python ciso_dashboard.py
 ```
 
-To reduce or increase bounded concurrency without changing source:
+Override the bounded concurrency and evaluation cap without changing source:
 
 ```bash
-CISO_MAX_WORKERS=10 ./.venv/bin/python ciso_dashboard.py
+CISO_MAX_WORKERS=3 CISO_MAX_EVALUATIONS=100 ./.venv/bin/python ciso_dashboard.py
 ```
 
-The executor submits all 1,000 evaluations and processes results in completion order. `CISO_MAX_WORKERS` controls the number of simultaneous worker threads; it does not change the number of evaluations.
+The dashboard validates the complete 1,000-record corpus, selects the first `CISO_MAX_EVALUATIONS` records, and processes them in completion order through at most `CISO_MAX_WORKERS` threads. The defaults of 200 evaluations and five workers are explicitly tuned for live demonstrations to reduce upstream LLM-provider `429 Too Many Requests` failures. Provider quotas vary, so lower either value if rate limiting persists.
 
 ### Dashboard Panels
 
 **Progress Panel**
 
-Tracks completed evaluations out of 1,000 and shows how many remain in flight or queued.
+Tracks completed evaluations for the configured run (200 by default) and shows how many remain in flight or queued.
 
 **Threat Matrix**
 
@@ -164,9 +176,9 @@ Dashboard exit codes:
 
 | Code | Meaning |
 |---:|---|
-| `0` | All 1,000 evaluations completed with verifiable receipt evidence |
+| `0` | All configured evaluations completed with verifiable receipt evidence |
 | `1` | One or more API/worker/receipt evidence failures occurred |
-| `2` | API key, worker configuration, or corpus validation failed |
+| `2` | API key, worker configuration, evaluation-cap configuration, or corpus validation failed |
 
 ## Failure Handling
 
@@ -176,11 +188,11 @@ The scripts preserve row-level failures instead of silently discarding them. Com
 |---|---|
 | `401 Unauthorized` | Invalid or expired `RAMEN_API_KEY` |
 | `402 Payment Required` | Account requires per-request provider credentials not forwarded by this demo |
-| `429 Too Many Requests` | Worker concurrency exceeds the account rate limit |
+| `429 Too Many Requests` | Upstream LLM-provider, ramen account, proxy, or gateway rate limit was exceeded |
 | Receipt absent or unverified | Signing alert, unknown key ID, invalid signature, binding mismatch, or non-V5 receipt |
 | Corpus validation failure | Missing, malformed, duplicate, or incorrectly counted JSONL records |
 
-For rate-limit pressure, lower `CISO_MAX_WORKERS`. Do not weaken receipt checks to make a sales demonstration appear successful.
+The live-demonstration defaults deliberately limit concurrency and evaluation volume to reduce upstream-provider rate-limit pressure. A `429` can also originate from account, proxy, or gateway limits; if one persists, lower `CISO_MAX_WORKERS` or `CISO_MAX_EVALUATIONS` and inspect the returned error details. Do not weaken receipt checks to make a sales demonstration appear successful.
 
 ## Files
 
@@ -209,7 +221,7 @@ Agents and contributors changing this example must preserve these boundaries:
 - Trust and display a receipt `kid` only after SDK verification succeeds.
 - Retain explicit API, worker, malformed-response, and receipt failure handling.
 - Keep Rich state mutation on the main thread consuming `as_completed()` results.
-- Do not replace bounded concurrency with 1,000 worker threads. Submit 1,000 jobs to the bounded executor instead.
+- Do not replace bounded concurrency with one worker per selected evaluation. Submit the configured evaluation cap to the bounded executor instead.
 - Do not add real customer prompts, credentials, production endpoints, or operationally executable attack targets to the corpus.
 - When changing the generator, regenerate `ciso_logs.jsonl` and verify that the checked-in output exactly matches generator output.
 
