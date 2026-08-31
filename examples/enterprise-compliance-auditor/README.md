@@ -13,7 +13,7 @@ Both workflows use the public `ramen-ai-core` Python SDK. They do not construct 
 
 A live run requires a ramen-ai API key. Account and tier information is available at [ramenai.dev/pricing](https://ramenai.dev/pricing).
 
-The CISO dashboard submits **200 live evaluations through five concurrent workers by default**. These live-demonstration defaults reduce the likelihood of `429 Too Many Requests` responses from upstream LLM providers. Confirm account quota, rate limits, and provider configuration before increasing them. The scripts currently pass `RAMEN_API_KEY` but do not forward a per-request BYOK provider key; use an account or configured proxy policy that supports this evaluation path.
+The CISO dashboard submits **200 live evaluations through five concurrent workers by default**. These live-demonstration defaults reduce the likelihood of `429 Too Many Requests` responses from upstream LLM providers. Confirm account quota, rate limits, and provider configuration before increasing them. Both scripts support optional OpenAI BYOK: a non-empty `OPENAI_API_KEY` is forwarded per request as the provider credential. Leave it blank for Enterprise accounts with managed provider credentials.
 
 Never commit `.env`, API keys, provider credentials, receipts, or customer log data.
 
@@ -73,8 +73,8 @@ Open `.env` and set local credentials and policy configuration. The template gro
 ```dotenv
 # API keys
 RAMEN_API_KEY="ramen_ak_..."
-# Reserved for workflows that explicitly forward BYOK credentials; this demo does not.
-OPENAI_API_KEY="sk-..."
+# Optional for Starter/Professional BYOK; leave blank for managed-provider accounts.
+OPENAI_API_KEY=""
 
 # Policy scope
 RAMEN_BUNDLE_ID="ramen__shield_core_it"
@@ -90,10 +90,12 @@ Configuration behavior differs slightly between the two workflows:
 | Variable | Historical audit | CISO dashboard |
 |---|---|---|
 | `RAMEN_API_KEY` | Required | Required |
-| `OPENAI_API_KEY` | Not used | Reserved placeholder; not forwarded by this demo |
+| `OPENAI_API_KEY` | Optional OpenAI BYOK | Optional OpenAI BYOK |
 | `RAMEN_POLICY_UUID` | Required | Optional override |
 | `CISO_MAX_WORKERS` | Not used | Optional; defaults to `5`, valid range `1`–`128` |
 | `CISO_MAX_EVALUATIONS` | Not used | Optional; defaults to `200`, valid range `1`–`1,000` |
+
+When `OPENAI_API_KEY` contains a usable key, each SDK call sends it as per-request OpenAI BYOK credentials. When it is absent, blank, or still set to the legacy `sk-...` placeholder, both provider parameters are omitted so Enterprise accounts retain their managed-provider configuration.
 
 When `RAMEN_POLICY_UUID` is set, the dashboard evaluates against that configured proxy policy. When it is absent or still contains `<YOUR_POLICY_UUID>`, the dashboard evaluates against `ramen__shield_core_it`.
 
@@ -187,7 +189,7 @@ The scripts preserve row-level failures instead of silently discarding them. Com
 | Symptom | Likely cause |
 |---|---|
 | `401 Unauthorized` | Invalid or expired `RAMEN_API_KEY` |
-| `402 Payment Required` | Account requires per-request provider credentials not forwarded by this demo |
+| `402 Payment Required` | Starter/Professional run omitted a usable `OPENAI_API_KEY`; managed-provider accounts intentionally leave it blank |
 | `429 Too Many Requests` | Upstream LLM-provider, ramen account, proxy, or gateway rate limit was exceeded |
 | Receipt absent or unverified | Signing alert, unknown key ID, invalid signature, binding mismatch, or non-V5 receipt |
 | Corpus validation failure | Missing, malformed, duplicate, or incorrectly counted JSONL records |

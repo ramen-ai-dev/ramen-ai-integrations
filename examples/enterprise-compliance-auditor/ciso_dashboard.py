@@ -30,6 +30,13 @@ DEFAULT_MAX_WORKERS = 5
 DEFAULT_MAX_EVALUATIONS = 200
 
 
+def _provider_credentials() -> tuple[str | None, str | None]:
+    provider_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not provider_key or provider_key == "sk-...":
+        return None, None
+    return provider_key, "openai"
+
+
 @dataclass(frozen=True)
 class ToolCall:
     log_id: str
@@ -161,6 +168,9 @@ def evaluate_tool_call(
     client: RamenClient,
     scope: dict[str, list[str]],
     tool_call: ToolCall,
+    *,
+    provider_key: str | None = None,
+    provider_name: str | None = None,
 ) -> EvaluationResult:
     try:
         response = client.evaluate_compliance(
@@ -171,6 +181,8 @@ def evaluate_tool_call(
                 "source": tool_call.source,
                 "tool_name": tool_call.tool_name,
             },
+            provider_key=provider_key,
+            provider_name=provider_name,
             **scope,
         )
         allowed = response.get("allowed")
@@ -297,11 +309,21 @@ def run_evaluations(
     tool_calls: list[ToolCall],
     max_workers: int,
     on_result: Callable[[EvaluationResult], None],
+    *,
+    provider_key: str | None = None,
+    provider_name: str | None = None,
 ) -> list[EvaluationResult]:
     results: list[EvaluationResult] = []
     with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="ciso-audit") as executor:
         futures: dict[Future[EvaluationResult], ToolCall] = {
-            executor.submit(evaluate_tool_call, client, scope, tool_call): tool_call
+            executor.submit(
+                evaluate_tool_call,
+                client,
+                scope,
+                tool_call,
+                provider_key=provider_key,
+                provider_name=provider_name,
+            ): tool_call
             for tool_call in tool_calls
         }
         for future in as_completed(futures):
@@ -356,6 +378,7 @@ def _max_evaluations() -> int:
 def main() -> int:
     load_dotenv(dotenv_path=BASE_DIR / ".env", override=False)
     api_key = os.environ.get("RAMEN_API_KEY", "").strip()
+    provider_key, provider_name = _provider_credentials()
     if not api_key:
         print("RAMEN_API_KEY must be set in examples/enterprise-compliance-auditor/.env.", file=sys.stderr)
         return 2
@@ -384,7 +407,15 @@ def main() -> int:
                 state.record(result)
                 live.update(render_dashboard(state), refresh=True)
 
-            run_evaluations(client, scope, tool_calls, max_workers, update_dashboard)
+            run_evaluations(
+                client,
+                scope,
+                tool_calls,
+                max_workers,
+                update_dashboard,
+                provider_key=provider_key,
+                provider_name=provider_name,
+            )
 
     console.print(
         f"[bold]Audit complete:[/bold] {state.allowed:,} allowed, "

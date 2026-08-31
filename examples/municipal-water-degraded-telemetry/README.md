@@ -6,6 +6,8 @@ To run this showcase, you must mint a ramen-ai API key. We offer a **Free
 Starter Tier** (1,000 evaluations/month, BYOK). Mint your key at:
 **[https://ramenai.dev/pricing](https://ramenai.dev/pricing)**
 
+Starter and Professional users can set `OPENAI_API_KEY` to forward OpenAI BYOK credentials on each evaluation. Enterprise accounts with managed provider credentials should leave it blank; the demo then omits both provider parameters.
+
 ## Dataset
 
 This example trains a deterministic XGBoost classifier on the public [Kaggle Pump Sensor Data](https://www.kaggle.com/datasets/nphantawee/pump-sensor-data), computes authentic TreeSHAP values from the runtime input, injects a deterministic sensor freeze, aggregates attribution by physical source, and evaluates the resulting operational authorization against the deployed ramen AI policy.
@@ -77,11 +79,18 @@ shasum -a 256 /absolute/path/to/sensor.csv
 Set only local values in `.env`:
 
 ```dotenv
-RAMEN_API_BASE_URL=https://api.ramenai.dev
+# API keys
 RAMEN_API_KEY=
+# Optional for Starter/Professional BYOK; leave blank for managed-provider accounts.
+OPENAI_API_KEY=
+
+# API and dataset configuration
+RAMEN_API_BASE_URL=https://api.ramenai.dev
 PUMP_SENSOR_DATA_PATH=/absolute/path/to/sensor.csv
 PUMP_SENSOR_DATA_SHA256=<64-character-sha256-from-shasum>
 ```
+
+A non-empty `OPENAI_API_KEY` is forwarded per request with provider name `openai`. When it is absent, blank, or still set to `sk-...`, the demo omits both provider parameters and uses the account's managed provider configuration. Environment variables already present in the invoking shell take precedence over `.env` values.
 
 The loader reads the file at `PUMP_SENSOR_DATA_PATH` only when its digest exactly matches `PUMP_SENSOR_DATA_SHA256`. A missing or mismatched digest fails closed rather than accepting an arbitrary shape-compatible CSV. Use an isolated business-tier demo identity. Never paste a credential or dataset contents into source, reports, logs, or chat.
 
@@ -111,11 +120,13 @@ Both commands fail rather than fabricate a demonstration if the approved dataset
 
 ## Production evaluation
 
-After setting `RAMEN_API_KEY`, run:
+After setting `RAMEN_API_KEY`, set `OPENAI_API_KEY` for Starter/Professional BYOK or leave it blank for an Enterprise account with managed provider credentials, then run:
 
 ```bash
 ./.venv/bin/python -m municipal_water_degraded_telemetry run
 ```
+
+A Starter/Professional request without a usable BYOK key can return `402 Payment Required`; an absent key is intentional for managed-provider accounts.
 
 The runner evaluates:
 

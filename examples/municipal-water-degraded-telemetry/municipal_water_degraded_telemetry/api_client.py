@@ -16,6 +16,8 @@ class EvaluationTransport(Protocol):
         input_text: str,
         *,
         policy_ids: list[str],
+        provider_key: str | None = None,
+        provider_name: str | None = None,
     ) -> dict[str, Any]: ...
 
 
@@ -33,26 +35,47 @@ class EvaluationFailure(RuntimeError):
 
 
 class MunicipalWaterPolicyClient:
-    def __init__(self, transport: EvaluationTransport) -> None:
+    def __init__(
+        self,
+        transport: EvaluationTransport,
+        *,
+        provider_key: str | None = None,
+        provider_name: str | None = None,
+    ) -> None:
         self._transport = transport
+        self._provider_key = provider_key
+        self._provider_name = provider_name
 
     @classmethod
     def from_environment(cls) -> "MunicipalWaterPolicyClient":
         api_key = os.environ.get("RAMEN_API_KEY", "").strip()
         base_url = os.environ.get("RAMEN_API_BASE_URL", DEFAULT_BASE_URL).strip()
+        raw_provider_key = os.environ.get("OPENAI_API_KEY", "").strip()
+        provider_key = (
+            raw_provider_key
+            if raw_provider_key and raw_provider_key != "sk-..."
+            else None
+        )
+        provider_name = "openai" if provider_key is not None else None
         if not api_key or api_key == "ramen_ak_...":
             raise EvaluationFailure("RAMEN_API_KEY is not configured")
         if base_url != DEFAULT_BASE_URL:
             raise EvaluationFailure(
                 f"This production example requires {DEFAULT_BASE_URL}"
             )
-        return cls(RamenClient(api_key=api_key, base_url=base_url))
+        return cls(
+            RamenClient(api_key=api_key, base_url=base_url),
+            provider_key=provider_key,
+            provider_name=provider_name,
+        )
 
     def evaluate(self, rendered_input: str) -> VerifiedEvaluation:
         try:
             result = self._transport.evaluate_compliance(
                 rendered_input,
                 policy_ids=[POLICY_UUID],
+                provider_key=self._provider_key,
+                provider_name=self._provider_name,
             )
         except (httpx.HTTPError, ValueError, TypeError, KeyError) as exc:
             raise EvaluationFailure(f"Policy evaluation failed: {exc}") from exc

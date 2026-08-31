@@ -22,6 +22,14 @@ EXPECTED_LOG_COUNT = 20
 EXPECTED_VIOLATION_COUNT = 5
 MAX_WORKERS = 5
 
+
+def _provider_credentials() -> tuple[str | None, str | None]:
+    provider_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not provider_key or provider_key == "sk-...":
+        return None, None
+    return provider_key, "openai"
+
+
 GREEN = "\033[92m"
 RED = "\033[91m"
 YELLOW = "\033[93m"
@@ -143,6 +151,9 @@ def evaluate_log(
     client: RamenClient,
     policy_uuid: str,
     log: HistoricalLog,
+    *,
+    provider_key: str | None = None,
+    provider_name: str | None = None,
 ) -> AuditResult:
     try:
         response = client.evaluate_compliance(
@@ -154,6 +165,8 @@ def evaluate_log(
                 "source": log.source,
                 "channel": log.channel,
             },
+            provider_key=provider_key,
+            provider_name=provider_name,
         )
 
         allowed = response.get("allowed")
@@ -222,11 +235,22 @@ def run_audit(
     client: RamenClient,
     policy_uuid: str,
     logs: list[HistoricalLog],
+    *,
+    provider_key: str | None = None,
+    provider_name: str | None = None,
 ) -> list[AuditResult]:
     results: list[AuditResult] = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures: dict[Future[AuditResult], HistoricalLog] = {
-            executor.submit(evaluate_log, client, policy_uuid, log): log for log in logs
+            executor.submit(
+                evaluate_log,
+                client,
+                policy_uuid,
+                log,
+                provider_key=provider_key,
+                provider_name=provider_name,
+            ): log
+            for log in logs
         }
         for completed, future in enumerate(as_completed(futures), start=1):
             log = futures[future]
@@ -376,6 +400,7 @@ def write_report(results: list[AuditResult], path: Path = REPORT_PATH) -> None:
 def main() -> int:
     api_key = os.environ.get("RAMEN_API_KEY", "")
     policy_uuid = os.environ.get("RAMEN_POLICY_UUID", POLICY_UUID_PLACEHOLDER)
+    provider_key, provider_name = _provider_credentials()
 
     if not api_key:
         print("RAMEN_API_KEY must be set in the environment.", file=sys.stderr)
@@ -398,7 +423,13 @@ def main() -> int:
         f"{MAX_WORKERS} concurrent workers."
     )
     with RamenClient(api_key) as client:
-        results = run_audit(client, policy_uuid, logs)
+        results = run_audit(
+            client,
+            policy_uuid,
+            logs,
+            provider_key=provider_key,
+            provider_name=provider_name,
+        )
 
     write_report(results)
     violations = sum(result.allowed is False for result in results)
