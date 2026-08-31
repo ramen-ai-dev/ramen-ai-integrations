@@ -45,9 +45,6 @@ jobs:
           VERSION="${TAG#action/}"
           MAJOR="v$(echo "$VERSION" | cut -d. -f1 | tr -d v)"
 
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
           # Clone the dedicated action repo
           git clone "https://x-access-token:${ACTION_PUBLISH_TOKEN}@github.com/ramen-ai-dev/ramen-ai-action.git" /tmp/action-repo
           mkdir -p /tmp/action-repo/assets /tmp/action-repo/dist
@@ -71,6 +68,8 @@ jobs:
           sed -i 's|../../RED_TEAM_GUIDE\.md|https://github.com/ramen-ai-dev/ramen-ai-integrations/blob/master/RED_TEAM_GUIDE.md|g' /tmp/action-repo/README.md
 
           cd /tmp/action-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
           git diff --cached --quiet && echo "Nothing to commit" && exit 0
 
