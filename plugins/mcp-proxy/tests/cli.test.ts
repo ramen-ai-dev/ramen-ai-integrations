@@ -104,20 +104,57 @@ describe("parseArgs()", () => {
     expect(config.apiKey).toBe("ramen_ak_test");
   });
 
-  it("reads OPENAI_API_KEY as providerKey", () => {
+  it("uses OPENAI_API_KEY with inferred OpenAI routing", () => {
     const config = parse(
       ["--target", "node s.js", "--bundle-ids", "b1"],
       { RAMEN_API_KEY: "ramen_ak_test", OPENAI_API_KEY: "sk-test" },
     );
     expect(config.providerKey).toBe("sk-test");
+    expect(config.providerName).toBe("openai");
   });
 
-  it("falls back to ANTHROPIC_API_KEY when OPENAI_API_KEY absent", () => {
+  it("falls back to ANTHROPIC_API_KEY with inferred Anthropic routing", () => {
     const config = parse(
       ["--target", "node s.js", "--bundle-ids", "b1"],
       { RAMEN_API_KEY: "ramen_ak_test", ANTHROPIC_API_KEY: "sk-ant-test" },
     );
     expect(config.providerKey).toBe("sk-ant-test");
+    expect(config.providerName).toBe("anthropic");
+  });
+
+  it("prefers OPENAI_API_KEY when both provider keys are set", () => {
+    const config = parse(
+      ["--target", "node s.js", "--bundle-ids", "b1"],
+      {
+        RAMEN_API_KEY: "ramen_ak_test",
+        OPENAI_API_KEY: "sk-test",
+        ANTHROPIC_API_KEY: "sk-ant-test",
+      },
+    );
+    expect(config.providerKey).toBe("sk-test");
+    expect(config.providerName).toBe("openai");
+  });
+
+  it("honors RAMEN_PROVIDER when a provider key is set", () => {
+    const config = parse(
+      ["--target", "node s.js", "--bundle-ids", "b1"],
+      {
+        RAMEN_API_KEY: "ramen_ak_test",
+        OPENAI_API_KEY: "custom-key",
+        RAMEN_PROVIDER: "google",
+      },
+    );
+    expect(config.providerKey).toBe("custom-key");
+    expect(config.providerName).toBe("google");
+  });
+
+  it("omits provider routing in Enterprise managed mode", () => {
+    const config = parse(
+      ["--target", "node s.js", "--bundle-ids", "b1"],
+      { RAMEN_API_KEY: "ramen_ak_test", RAMEN_PROVIDER: "anthropic" },
+    );
+    expect(config.providerKey).toBeUndefined();
+    expect(config.providerName).toBeUndefined();
   });
 
   it("reads RAMEN_BASE_URL as baseUrl", () => {

@@ -24,14 +24,15 @@
  * the RED TEAM EXERCISE section and follow the swap instructions there.
  *
  * BYOK note: the Starter and Professional tiers require you to supply your own
- * LLM provider key (OpenAI, Anthropic, etc.) via the OPENAI_API_KEY env var.
- * This is forwarded as the X-Provider-Key header on every evaluation request.
- * Enterprise tiers use platform-managed keys — omit OPENAI_API_KEY in that
- * case and remove the providerKey option from the RamenClient constructor.
+ * LLM provider key via OPENAI_API_KEY or ANTHROPIC_API_KEY. The example pairs
+ * the selected key with its provider identity; RAMEN_PROVIDER can override the
+ * inferred identity. Enterprise tiers use platform-managed keys — omit all
+ * provider variables so neither provider field is sent.
  */
 
 import { AgentMeshClient } from "@microsoft/agent-governance-sdk";
 import { RamenClient, RamenFirewallBackend, GovernanceDenied } from "../src/index.js";
+import { providerOptionsFromEnv } from "../src/provider-options.js";
 
 // The Core IT Security bundle (guards destructive execution, prompt injection,
 // secret exfiltration, unauthorised financial transfers, and OWASP ASI-06).
@@ -116,9 +117,10 @@ async function main(): Promise<void> {
   }
 
   // BYOK: Starter and Professional tiers require your own LLM provider key.
-  // Load it from the environment — never hard-code it.
-  // Enterprise tiers: omit this and remove providerKey from RamenClient below.
-  const providerKey = process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY;
+  // OpenAI takes precedence when both keys are present. RAMEN_PROVIDER may
+  // override the inferred provider identity for a compatible custom route.
+  // Enterprise tiers omit all provider variables for platform-managed inference.
+  const { providerKey, providerName } = providerOptionsFromEnv(process.env);
   if (!providerKey) {
     console.warn(
       "Warning: no OPENAI_API_KEY or ANTHROPIC_API_KEY found in environment.\n" +
@@ -139,9 +141,9 @@ async function main(): Promise<void> {
   });
   const ramen = new RamenClient({
     apiKey,
-    // BYOK: pass the provider key so the backend can run LLM inference on
-    // your behalf. Remove this line on Enterprise tiers.
-    ...(providerKey ? { providerKey } : {}),
+    // BYOK: forward the selected provider key and matching identity together.
+    // Enterprise managed mode omits both fields.
+    ...(providerKey && providerName ? { providerKey, providerName } : {}),
   });
   const firewall = new RamenFirewallBackend(ramen, {
     bundleIds: [BUNDLE],

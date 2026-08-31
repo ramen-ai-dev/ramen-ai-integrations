@@ -305,3 +305,39 @@ def test_exception_str_contains_key_fields():
     assert "OWASP ASI-06" in msg
     assert "Do not proceed." in msg
     assert "True" in msg
+
+
+# ---------------------------------------------------------------------------
+# 9. Request-scoped provider routing
+# ---------------------------------------------------------------------------
+
+
+def test_byok_headers_are_forwarded(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(
+        url="https://api.ramenai.dev/api/v1/paas/evaluate",
+        json=_evaluate_response(allowed=True),
+    )
+    handler = _make_handler(
+        provider_key="provider-test-key",
+        provider_name="anthropic",
+    )
+    handler.on_tool_start(SERIALIZED_TOOL, INPUT_STR, run_id=RUN_ID)
+
+    request = httpx_mock.get_request()
+    assert request is not None
+    assert request.headers["X-Provider-Key"] == "provider-test-key"
+    assert request.headers["X-Provider"] == "anthropic"
+
+
+def test_managed_mode_omits_provider_headers(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(
+        url="https://api.ramenai.dev/api/v1/paas/evaluate",
+        json=_evaluate_response(allowed=True),
+    )
+    handler = _make_handler()
+    handler.on_tool_start(SERIALIZED_TOOL, INPUT_STR, run_id=RUN_ID)
+
+    request = httpx_mock.get_request()
+    assert request is not None
+    assert "X-Provider-Key" not in request.headers
+    assert "X-Provider" not in request.headers

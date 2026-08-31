@@ -104,8 +104,9 @@ from ramen_langchain import RamenSafetyCallbackHandler, RamenSafetyException
 handler = RamenSafetyCallbackHandler(
     api_key=os.environ["RAMEN_API_KEY"],
     bundle_ids=["ramen__shield_core_it"],
-    # BYOK: required on Starter/Professional tiers. Omit on Enterprise.
+    # BYOK: required on Starter/Professional tiers. Omit both on Enterprise.
     provider_key=os.environ.get("OPENAI_API_KEY"),
+    provider_name="openai" if os.environ.get("OPENAI_API_KEY") else None,
 )
 
 try:
@@ -125,16 +126,27 @@ except RamenSafetyException as exc:
 ### BYOK (Bring Your Own Key)
 
 The Starter and Professional tiers require your own LLM provider key (OpenAI,
-Anthropic, etc.). Pass it as `provider_key` — forwarded as the
-`X-Provider-Key` header on every evaluation request. Without it, the API
-returns `402 Payment Required` on these tiers.
+Anthropic, etc.). Pass it as `provider_key` and identify its provider with
+`provider_name`; the pair is forwarded as the `X-Provider-Key` and
+`X-Provider` headers on every evaluation request. Without a provider key,
+the API returns `402 Payment Required` on these tiers.
 
 ```bash
 export RAMEN_API_KEY=ramen_ak_...
 export OPENAI_API_KEY=sk-...
 ```
 
-Enterprise tiers use platform-managed keys — omit `provider_key` entirely.
+```python
+handler = RamenSafetyCallbackHandler(
+    api_key=os.environ["RAMEN_API_KEY"],
+    bundle_ids=["ramen__shield_core_it"],
+    provider_key=os.environ["OPENAI_API_KEY"],
+    provider_name="openai",
+)
+```
+
+Enterprise tiers use platform-managed keys — omit both `provider_key` and
+`provider_name`.
 
 ---
 
@@ -177,6 +189,7 @@ unreachable firewall never becomes an open door.
 | `bundle_ids` | `list[str]` | one of | Bundle slugs to evaluate against. |
 | `policy_ids` | `list[str]` | one of | Explicit policy UUIDs. |
 | `provider_key` | `str` | Starter/Pro | LLM provider key forwarded as `X-Provider-Key`. |
+| `provider_name` | `str` | with BYOK | Provider identifier (for example, `openai` or `anthropic`) forwarded as `X-Provider`. |
 | `base_url` | `str` | no | Override the API base URL. |
 | `timeout` | `float` | no | Request timeout in seconds (default `30.0`). |
 | `require_receipt_verified` | `bool` | no | When `True` (default), an ALLOWED verdict with an unverifiable receipt is escalated to a BLOCK. |

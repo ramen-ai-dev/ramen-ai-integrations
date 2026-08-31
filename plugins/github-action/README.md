@@ -167,8 +167,9 @@ the `action.yml` default resolving at runtime.
 ## Bring Your Own Key (BYOK)
 
 The Starter and Professional tiers require your own LLM provider key. The
-Action forwards it as the `X-Provider-Key` header. Without it, evaluations
-return `402 Payment Required` on these tiers.
+Action forwards it together with `provider_name` so ramen-ai routes the request
+to the correct provider. Without a provider key, evaluations return
+`402 Payment Required` on these tiers.
 
 ### 1. Add your secrets to GitHub
 
@@ -177,9 +178,9 @@ return `402 Payment Required` on these tiers.
 | Secret name | Value |
 |---|---|
 | `RAMEN_API_KEY` | Your `ramen_ak_...` key from [ramenai.dev/pricing](https://ramenai.dev/pricing) |
-| `OPENAI_API_KEY` | Your OpenAI (or Anthropic) key from your provider portal |
+| `OPENAI_API_KEY` | Your OpenAI key from your provider portal |
 
-### 2. Pass the provider key in your workflow
+### 2. Pass the provider key and identity in your workflow
 
 ```yaml
       - name: ramen-ai PR Compliance Interceptor
@@ -189,10 +190,14 @@ return `402 Payment Required` on these tiers.
           bundle_ids: "ramen__shield_core_it"
           github_token: ${{ secrets.GITHUB_TOKEN }}
           provider_key: ${{ secrets.OPENAI_API_KEY }}
+          provider_name: openai
 ```
 
-**Enterprise tier:** omit `provider_key` — managed keys are provisioned
-server-side.
+Accepted provider names include `openai`, `anthropic`, and `google`. Store the
+matching key in a GitHub secret and never inline it in workflow YAML.
+
+**Enterprise tier:** omit both `provider_key` and `provider_name`; ramen-ai uses
+platform-managed inference.
 
 ---
 
@@ -204,7 +209,8 @@ server-side.
 | `github_token` | **yes** | — | Pass `${{ secrets.GITHUB_TOKEN }}` explicitly. The job must also declare `permissions: contents: read` and `pull-requests: write` at **job level**. |
 | `bundle_ids` | one of | `""` | Comma-separated bundle slugs (e.g. `ramen__shield_core_it`). |
 | `policy_ids` | one of | `""` | Explicit policy UUIDs for raw policy testing. |
-| `provider_key` | Starter/Pro | `""` | BYOK LLM provider key, forwarded as `X-Provider-Key`. |
+| `provider_key` | Starter/Pro | `""` | BYOK LLM provider key, forwarded request-scoped. |
+| `provider_name` | with BYOK | `""` | Provider identity paired with `provider_key` (`openai`, `anthropic`, or `google`). |
 | `base_url` | no | `""` | Override the ramen-ai API base URL. |
 | `file_extensions` | no | `.md,.txt,.py` | Comma-separated extensions whose added text is scanned. |
 | `fail_on_unverified_receipt` | no | `"true"` | When `true`, an unverifiable receipt is treated as a build failure. |

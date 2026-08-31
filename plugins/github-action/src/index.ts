@@ -19,6 +19,8 @@ import * as core from "@actions/core";
 import * as github from "@actions/github";
 import { RamenClient, type ComplianceVerdict } from "@ramen-ai/node-core";
 
+import { buildProviderOptions } from "./provider-options.js";
+
 /** A blocked finding for one changed file. */
 interface BlockedFinding {
   file: string;
@@ -152,7 +154,10 @@ async function run(): Promise<void> {
     return;
   }
   const baseUrl = core.getInput("base_url").trim();
-  const providerKey = core.getInput("provider_key").trim() || undefined;
+  const providerOptions = buildProviderOptions(
+    core.getInput("provider_key"),
+    core.getInput("provider_name"),
+  );
   const extensions = parseCsv(core.getInput("file_extensions")).map((e) =>
     e.startsWith(".") ? e.toLowerCase() : `.${e.toLowerCase()}`,
   );
@@ -212,7 +217,7 @@ async function run(): Promise<void> {
   const client = new RamenClient({
     apiKey,
     ...(baseUrl ? { baseUrl } : {}),
-    ...(providerKey ? { providerKey } : {}),
+    ...providerOptions,
   });
 
   const blocked: BlockedFinding[] = [];

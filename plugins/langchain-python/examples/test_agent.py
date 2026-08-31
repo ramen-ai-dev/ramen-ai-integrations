@@ -105,8 +105,9 @@ handler = RamenSafetyCallbackHandler(
     api_key=_api_key,
     bundle_ids=["ramen__shield_core_it"],
     # BYOK: required on Starter/Professional tiers.
-    # Remove provider_key on Enterprise (platform-managed keys).
+    # Remove both provider fields on Enterprise (platform-managed keys).
     provider_key=_openai_key,
+    provider_name="openai" if _openai_key else None,
 )
 
 # ---------------------------------------------------------------------------

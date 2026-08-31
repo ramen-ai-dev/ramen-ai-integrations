@@ -219,9 +219,11 @@ npx tsx examples/test_agent.ts
 
 > **BYOK requirement:** The Starter and Professional tiers require you to
 > supply your own LLM provider key (`OPENAI_API_KEY` or `ANTHROPIC_API_KEY`).
-> The client forwards it as the `X-Provider-Key` header on every evaluation
-> request. Without it, the API returns `402 Payment Required`. Enterprise
-> tiers use platform-managed keys — omit the provider key entirely.
+> The examples forward the selected key together with its provider identity;
+> `RAMEN_PROVIDER` can override the inferred `openai` or `anthropic` route.
+> Without a provider key, the API returns `402 Payment Required` on these tiers.
+> Enterprise tiers use platform-managed keys — omit all provider variables so
+> neither provider field is sent.
 
 Expected outcome:
 
@@ -247,8 +249,9 @@ const firewall = new RamenFirewallBackend(
   new RamenClient({
     apiKey: process.env.RAMEN_API_KEY!,
     // BYOK: required on Starter/Professional tiers.
-    // Omit on Enterprise (platform-managed keys).
+    // Omit both fields on Enterprise (platform-managed keys).
     providerKey: process.env.OPENAI_API_KEY,
+    providerName: process.env.OPENAI_API_KEY ? "openai" : undefined,
   }),
   {
     bundleIds: ["ramen__shield_core_it"],

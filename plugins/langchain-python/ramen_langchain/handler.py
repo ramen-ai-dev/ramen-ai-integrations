@@ -62,6 +62,10 @@ class RamenSafetyCallbackHandler(BaseCallbackHandler):
         BYOK — your LLM provider API key (OpenAI, Anthropic, etc.).
         Required on Starter / Professional tiers; forwarded as the
         ``X-Provider-Key`` header.  Omit on Enterprise.
+    provider_name:
+        Provider identifier paired with ``provider_key`` (for example,
+        ``"openai"`` or ``"anthropic"``); forwarded as the
+        ``X-Provider`` header. Omit on Enterprise.
     base_url:
         Override the ramen-ai API base URL (for staging / local testing).
     timeout:
@@ -86,6 +90,7 @@ class RamenSafetyCallbackHandler(BaseCallbackHandler):
             api_key=os.environ["RAMEN_API_KEY"],
             bundle_ids=["ramen__shield_core_it"],
             provider_key=os.environ.get("OPENAI_API_KEY"),
+            provider_name="openai" if os.environ.get("OPENAI_API_KEY") else None,
         )
 
         try:
@@ -107,6 +112,7 @@ class RamenSafetyCallbackHandler(BaseCallbackHandler):
         bundle_ids: list[str] | None = None,
         policy_ids: list[str] | None = None,
         provider_key: str | None = None,
+        provider_name: str | None = None,
         base_url: str | None = None,
         timeout: float = 30.0,
         require_receipt_verified: bool = True,
@@ -128,6 +134,7 @@ class RamenSafetyCallbackHandler(BaseCallbackHandler):
         self._bundle_ids = list(bundle_ids) if bundle_ids else []
         self._policy_ids = list(policy_ids) if policy_ids else []
         self._provider_key = provider_key
+        self._provider_name = provider_name
         self._require_receipt_verified = require_receipt_verified
         self._context = context or {}
 
@@ -194,6 +201,8 @@ class RamenSafetyCallbackHandler(BaseCallbackHandler):
                     "tool_name": tool_name,
                     "run_id": str(run_id),
                 },
+                provider_key=self._provider_key,
+                provider_name=self._provider_name,
             )
         except Exception as exc:
             # Fail-closed: infrastructure failures are treated as blocks.

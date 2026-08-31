@@ -21,7 +21,13 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Install dependencies and rebuild dist
+      - name: Build Node core client
+        working-directory: core-clients/node
+        run: |
+          npm ci --no-audit
+          npm run build
+
+      - name: Install Action dependencies and rebuild dist
         working-directory: plugins/github-action
         run: |
           npm ci --no-audit

@@ -37,7 +37,8 @@ Environment variables (required):
 Environment variables (optional / BYOK):
   OPENAI_API_KEY          LLM provider key (forwarded as X-Provider-Key)
   ANTHROPIC_API_KEY       Alternative BYOK provider key
-  RAMEN_PROVIDER          Provider name: openai | anthropic | google  (default: openai)
+  RAMEN_PROVIDER          Provider name override: openai | anthropic | google
+                           (otherwise inferred from the selected provider key)
   RAMEN_BASE_URL          Override the ramen-ai API base URL
 
 Examples:
@@ -127,7 +128,9 @@ export function parseArgs(argv: string[], env: Record<string, string | undefined
   if (!apiKey) printUsageAndExit("RAMEN_API_KEY is not set in the environment.");
 
   const providerKey = env.OPENAI_API_KEY || env.ANTHROPIC_API_KEY;
-  const providerName = env.RAMEN_PROVIDER;
+  const providerName = providerKey
+    ? env.RAMEN_PROVIDER || (env.OPENAI_API_KEY ? "openai" : "anthropic")
+    : undefined;
   const baseUrl = env.RAMEN_BASE_URL;
 
   return {

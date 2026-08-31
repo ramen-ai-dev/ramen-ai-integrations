@@ -3,9 +3,14 @@
  * Semantic Firewall halts a destructive tool call made by a Microsoft AGT
  * agent BEFORE the tool executes.
  *
- * Hits the LIVE evaluation API (https://api.ramenai.dev). Requires a real key:
+ * Hits the LIVE evaluation API (https://api.ramenai.dev). Requires a real
+ * ramen-ai key and accepts an optional BYOK provider key:
  *
- *     RAMEN_API_KEY=ramen_ak_... npm run example:live
+ *     RAMEN_API_KEY=ramen_ak_... OPENAI_API_KEY=sk-... npm run example:live
+ *
+ * Omit provider variables on Enterprise to use platform-managed inference.
+ * ANTHROPIC_API_KEY is also supported and RAMEN_PROVIDER can override the
+ * provider identity inferred from the selected key.
  *
  * The firewall is wired into AGT as an ExternalPolicyBackend and as the action
  * guard (`governAction`). We run two scenarios against the only active bundle
@@ -21,6 +26,7 @@
 
 import { AgentMeshClient } from "@microsoft/agent-governance-sdk";
 import { RamenClient, RamenFirewallBackend, GovernanceDenied } from "../src/index.js";
+import { providerOptionsFromEnv } from "../src/provider-options.js";
 
 const BUNDLE = "ramen__shield_core_it";
 const AGENT_ID = "it-ops-agent";
@@ -127,12 +133,24 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
+  const { providerKey, providerName } = providerOptionsFromEnv(process.env);
+  if (!providerKey) {
+    console.warn(
+      "Warning: no OPENAI_API_KEY or ANTHROPIC_API_KEY found in environment.\n" +
+        "Starter/Professional tiers require a provider key (BYOK). " +
+        "If you are on an Enterprise tier, this warning can be ignored.",
+    );
+  }
+
   // Initialise the AGT agent and wire the firewall in as a policy backend.
   const client = AgentMeshClient.create(AGENT_ID, {
     capabilities: ["db.admin"],
     policyRules: [{ action: "*", effect: "allow" }], // agent L1 is permissive; firewall is L2
   });
-  const ramen = new RamenClient({ apiKey });
+  const ramen = new RamenClient({
+    apiKey,
+    ...(providerKey && providerName ? { providerKey, providerName } : {}),
+  });
   const firewall = new RamenFirewallBackend(ramen, {
     bundleIds: [BUNDLE],
     agentId: AGENT_ID,

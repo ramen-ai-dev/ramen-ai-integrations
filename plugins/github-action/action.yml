@@ -53,6 +53,13 @@ inputs:
       Secret and pass it via your workflow file — never inline a key value here.
     required: false
     default: ""
+  provider_name:
+    description: >-
+      Provider identity paired with provider_key. Accepted values include
+      "openai", "anthropic", and "google". Omit with provider_key on
+      Enterprise to use platform-managed inference.
+    required: false
+    default: ""
 
 runs:
   using: "node24"

@@ -24810,6 +24810,17 @@ var RamenClient = class {
   }
 };
 
+// src/provider-options.ts
+function buildProviderOptions(rawProviderKey, rawProviderName) {
+  const providerKey = rawProviderKey.trim();
+  if (!providerKey) return {};
+  const providerName = rawProviderName.trim().toLowerCase();
+  return {
+    providerKey,
+    ...providerName ? { providerName } : {}
+  };
+}
+
 // src/index.ts
 function parseCsv(raw) {
   return raw.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
@@ -24896,7 +24907,10 @@ async function run() {
     return;
   }
   const baseUrl2 = getInput("base_url").trim();
-  const providerKey = getInput("provider_key").trim() || void 0;
+  const providerOptions = buildProviderOptions(
+    getInput("provider_key"),
+    getInput("provider_name")
+  );
   const extensions = parseCsv(getInput("file_extensions")).map(
     (e) => e.startsWith(".") ? e.toLowerCase() : `.${e.toLowerCase()}`
   );
@@ -24943,7 +24957,7 @@ async function run() {
   const client = new RamenClient({
     apiKey,
     ...baseUrl2 ? { baseUrl: baseUrl2 } : {},
-    ...providerKey ? { providerKey } : {}
+    ...providerOptions
   });
   const blocked = [];
   const errored = [];

@@ -233,19 +233,22 @@ RAMEN_API_KEY=ramen_ak_... \
 | Variable | Required | Description |
 |---|---|---|
 | `RAMEN_API_KEY` | **yes** | ramen-ai PaaS API key (`ramen_ak_...`). Never pass as a CLI argument. |
-| `OPENAI_API_KEY` | Starter/Pro | BYOK LLM provider key. Forwarded as `X-Provider-Key`. |
-| `ANTHROPIC_API_KEY` | Starter/Pro | Alternative BYOK provider key (used if `OPENAI_API_KEY` absent). |
-| `RAMEN_PROVIDER` | no | Provider name: `openai` \| `anthropic` \| `google` (default: `openai`). |
+| `OPENAI_API_KEY` | Starter/Pro | BYOK LLM provider key. Forwarded as `X-Provider-Key`; takes precedence if both keys are set. |
+| `ANTHROPIC_API_KEY` | Starter/Pro | Alternative BYOK provider key used when `OPENAI_API_KEY` is absent. |
+| `RAMEN_PROVIDER` | no | Optional provider override: `openai` \| `anthropic` \| `google`. Otherwise inferred from the selected key. |
 | `RAMEN_BASE_URL` | no | Override the ramen-ai API base URL (for staging/testing). |
 
 ### BYOK (Bring Your Own Key)
 
 The Starter and Professional tiers require your own LLM provider key. Pass it
-via `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` — the proxy forwards it as the
-`X-Provider-Key` header on every evaluation request. Without it, the API
-returns `402 Payment Required` on these tiers.
+via `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` — the proxy forwards the selected
+key and automatically routes it to `openai` or `anthropic`. `OPENAI_API_KEY`
+takes precedence when both are set. Use `RAMEN_PROVIDER` only when an explicit
+provider override is needed. Without a provider key, the API returns
+`402 Payment Required` on these tiers.
 
-Enterprise tiers use platform-managed keys — omit the provider key entirely.
+Enterprise tiers use platform-managed keys — omit all provider variables. The
+proxy then sends neither provider field.
 
 ---
 
