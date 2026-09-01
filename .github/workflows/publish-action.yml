@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Checkout monorepo
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Node 24
         uses: actions/setup-node@v4
@@ -45,7 +47,12 @@ jobs:
           VERSION="${TAG#action/}"
           MAJOR="v$(echo "$VERSION" | cut -d. -f1 | tr -d v)"
 
-          # Clone the dedicated action repo
+          if [ -z "${ACTION_PUBLISH_TOKEN}" ]; then
+            echo "::error::ACTION_PUBLISH_TOKEN is not configured"
+            exit 1
+          fi
+
+          # Clone the dedicated action repo with its repository-scoped token.
           git clone "https://x-access-token:${ACTION_PUBLISH_TOKEN}@github.com/ramen-ai-dev/ramen-ai-action.git" /tmp/action-repo
           mkdir -p /tmp/action-repo/assets /tmp/action-repo/dist
 
