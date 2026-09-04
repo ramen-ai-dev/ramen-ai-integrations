@@ -200,12 +200,3 @@ Full bundle and policy reference: [https://ramenai.dev/pricing](https://ramenai.
 │   └── workflows/           # CI workflows
 └── RED_TEAM_GUIDE.md        # Zero-day evasion vectors and challenge guide
 ```
-
----
-
-## Adding integration logos
-
-When adding a platform integration, update the standard ecosystem row in the
-home README, every plugin README, and every translated companion. See
-**[Adding Integration Logos](docs/adding-integration-logos.md)** for branding,
-internal-link, self-badge, asset, disclosure, and validation requirements.

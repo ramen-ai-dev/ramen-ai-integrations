@@ -6,8 +6,11 @@
 _ref/
 _ref_archive/
 
-# --- Internal runbooks (local only, never committed) ---
-docs/integration-checklist.md
+# --- Internal contributor guidance (local only, never committed) ---
+/AGENTS.md
+/docs/adding-integration-logos.md
+/docs/integration-checklist.md
+/docs/github-action-marketplace-teardown.md
 
 # --- Node.js ---
 node_modules/
@@ -73,11 +76,6 @@ htmlcov/
 *.log
 logs/
 
-# --- Agents ---
-AGENTS.md
-
-# --- Internal research & design documents (local context only) ---
-docs/
 # --- MLflow local tracking artifacts ---
 mlruns/
 mlartifacts/
