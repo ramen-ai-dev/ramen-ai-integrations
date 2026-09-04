@@ -34,7 +34,7 @@ steering instruction that is auditable, reproducible, and legally defensible.
     <img src="https://img.shields.io/badge/PydanticAI-E92063?style=flat&logo=pydantic&logoColor=white" alt="PydanticAI"/>
   </a>
   &nbsp;
-  <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/mcp-proxy">
+  <a href="https://github.com/ramen-ai-dev/mcp-shield-proxy">
     <img src="https://img.shields.io/badge/MCP-6B21A8?style=flat&logo=anthropic&logoColor=white" alt="MCP"/>
   </a>
   &nbsp;
@@ -133,7 +133,7 @@ queue, or gateway not covered by the plugins below.
 | `github-action` | GitHub Actions | [`plugins/github-action/`](plugins/github-action/) | Scans PR diffs for system-prompt modifications, evaluates against compliance policies, fails CI on `[BLOCKED]` — with a cryptographic receipt comment on the PR. |
 | `langchain-python` | LangChain (Python) | [`plugins/langchain-python/`](plugins/langchain-python/) | `BaseCallbackHandler` that intercepts LangChain tool calls pre-execution and halts the chain on `[BLOCKED]`. |
 | `pydantic-ai` | PydanticAI (Python) | [`plugins/pydantic-ai/`](plugins/pydantic-ai/) | `args_validator` factory that intercepts tool calls after schema validation and halts the agent run on `[BLOCKED]`. |
-| `mcp-proxy` | MCP stdio (universal) | [`plugins/mcp-proxy/`](plugins/mcp-proxy/) | Universal stdio proxy intercepting `tools/call` JSON-RPC at the transport layer. Works with Claude Desktop and any stdio MCP client. |
+| `mcp-proxy` | MCP stdio (universal) | [Standalone repository](https://github.com/ramen-ai-dev/mcp-shield-proxy) | Universal stdio proxy intercepting `tools/call` JSON-RPC at the transport layer. Works with Claude Desktop and any stdio MCP client. |
 | `cmcp-python` | cMCP + TRACE | [`plugins/cmcp-python/`](plugins/cmcp-python/) | cMCP tool-call policy adapter, plus a TRACE Trust Record exporter that maps V5 Ed25519 receipts onto the agentrust-io EAT profile. |
 | `mlflow-python` | MLflow / Databricks | [`plugins/mlflow-python/`](plugins/mlflow-python/) | `mlflow.pyfunc.PythonModel` wrapper enforcing algorithmic governance on classical ML. Evaluates feature arrays and SHAP attributions for proxy bias pre-inference; halts serving on `[BLOCKED]`. |
 | `ramen-data-filter` | Pandas / CSV | [`plugins/ramen-data-filter/`](plugins/ramen-data-filter/) | Dual-mode row filtration for RAG ingestion and MLOps datasets. Strictly excludes blocked records or semantically imputes steering-approved columns. |
