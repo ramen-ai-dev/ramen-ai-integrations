@@ -20,9 +20,11 @@ from .governed_types import (
     GovernedStreamEvent,
     GovernedTokenUsage,
 )
+from .types import AttestationPayload, RamenReceipt
 from .verifier import verify_receipt
 
 __all__ = [
+    "AttestationPayload",
     "GovernanceDeniedException",
     "GovernedAccounting",
     "GovernedAttemptMetadata",
@@ -42,6 +44,7 @@ __all__ = [
     "GovernedStreamEvent",
     "GovernedTokenUsage",
     "RamenClient",
+    "RamenReceipt",
     "verify_receipt",
 ]
-__version__ = "0.3.2"
+__version__ = "0.3.3"

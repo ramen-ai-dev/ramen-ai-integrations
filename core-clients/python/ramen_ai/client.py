@@ -35,6 +35,7 @@ from .governed_types import (
     GovernedProviderName,
     GovernedStreamEvent,
 )
+from .types import AttestationPayload
 from .verifier import verify_receipt
 
 _EVALUATE_PATH = "/api/v1/paas/evaluate"
@@ -86,6 +87,7 @@ class RamenClient:
         bundle_ids: list[str] | None = None,
         policy_ids: list[str] | None = None,
         context: dict[str, str] | None = None,
+        attestation: AttestationPayload | None = None,
         provider_key: str | None = None,
         provider_name: str | None = None,
     ) -> dict[str, Any]:
@@ -105,6 +107,8 @@ class RamenClient:
             Explicit policy UUIDs to evaluate in parallel.
         context:
             Optional string-keyed metadata forwarded to the audit log.
+        attestation:
+            Optional vendor attestation payload forwarded with the evaluation.
         provider_key:
             BYOK — the caller's LLM provider API key (e.g. an OpenAI or
             Anthropic key). Required on Starter/Professional tiers; omit on
@@ -165,6 +169,8 @@ class RamenClient:
             body["policy_ids"] = policy_ids
         if context:
             body["context"] = context
+        if attestation is not None:
+            body["attestation"] = attestation
 
         # BYOK: inject per-request provider headers when present.
         # X-Provider-Key is required on Starter/Professional tiers.

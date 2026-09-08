@@ -63,10 +63,18 @@ export interface RamenClientOptions {
   timeoutMs?: number;
 }
 
+export interface AttestationPayload {
+  vendor: string;
+  evidence: string;
+  challenge?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface EvaluateOptions {
   bundleIds?: string[];
   policyIds?: string[];
   context?: Record<string, string>;
+  attestation?: AttestationPayload;
 }
 
 export class RamenClient {
@@ -108,6 +116,7 @@ export class RamenClient {
     if (opts.bundleIds?.length) body.bundle_ids = opts.bundleIds;
     if (opts.policyIds?.length) body.policy_ids = opts.policyIds;
     if (opts.context) body.context = opts.context;
+    if (opts.attestation !== undefined) body.attestation = opts.attestation;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);

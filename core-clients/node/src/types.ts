@@ -14,6 +14,7 @@ export interface RamenReceipt {
   signature: string; // base64url Ed25519 signature
   canonical_payload: string; // the EXACT signed string
   statutory_anchors?: string[];
+  attestation?: Record<string, unknown> | null;
 }
 
 /** A single rule violation from the evaluator. */

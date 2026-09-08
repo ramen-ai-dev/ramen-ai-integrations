@@ -11,7 +11,11 @@
  */
 
 export { RamenClient } from "./client.js";
-export type { RamenClientOptions, EvaluateOptions } from "./client.js";
+export type {
+  AttestationPayload,
+  RamenClientOptions,
+  EvaluateOptions,
+} from "./client.js";
 
 export {
   GovernanceDeniedException,
