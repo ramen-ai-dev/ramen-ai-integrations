@@ -97,3 +97,62 @@ export async function verifyReceipt(
     return { valid: false, reason: `Verification error: ${(err as Error).message}` };
   }
 }
+
+/** Result of {@link verifyAllowReceiptSignature}. */
+export type AllowReceiptCheck = { valid: true } | { valid: false; reason: string };
+
+/**
+ * Verify that a V5 receipt is an authentic, signed ALLOW verdict, without the
+ * input-hash binding step of {@link verifyReceipt}.
+ *
+ * Use this when the evaluated input string is not available, for example
+ * when contributing an exemplar to ramen forge. It checks the Ed25519
+ * signature over `canonical_payload` (key by `kid`) and that the *signed*
+ * payload says schema_version "5.0", the same `kid` and `id`, and
+ * `verdict === 1`. It does not prove which input the receipt covers.
+ *
+ * Never throws — failures are returned as `{ valid: false, reason }`.
+ */
+export async function verifyAllowReceiptSignature(
+  receipt: RamenReceipt,
+  publicKeys: Record<string, string> = AUDIT_PUBLIC_KEYS,
+): Promise<AllowReceiptCheck> {
+  try {
+    if (!receipt?.canonical_payload || !receipt.signature || !receipt.kid || !receipt.id) {
+      return { valid: false, reason: "Receipt must include id, kid, signature, and canonical_payload" };
+    }
+    const publicKeyB64 = publicKeys[receipt.kid];
+    if (!publicKeyB64) return { valid: false, reason: `Unknown kid: ${receipt.kid}` };
+    const key = await crypto.subtle.importKey(
+      "spki",
+      fromBase64(publicKeyB64),
+      { name: "Ed25519" },
+      false,
+      ["verify"],
+    );
+    const sigValid = await crypto.subtle.verify(
+      "Ed25519",
+      key,
+      fromBase64(receipt.signature),
+      utf8(receipt.canonical_payload),
+    );
+    if (!sigValid) return { valid: false, reason: "Signature does not verify" };
+
+    // Everything below is read from the signed bytes, not the unsigned fields.
+    const signed = JSON.parse(receipt.canonical_payload) as Record<string, unknown>;
+    if (signed === null || typeof signed !== "object" || Array.isArray(signed)) {
+      return { valid: false, reason: "canonical_payload is not a JSON object" };
+    }
+    if (signed.schema_version !== "5.0") {
+      return { valid: false, reason: `Unexpected signed schema_version: ${String(signed.schema_version)}` };
+    }
+    if (signed.kid !== receipt.kid) return { valid: false, reason: "Signed kid does not match receipt.kid" };
+    if (signed.id !== receipt.id) return { valid: false, reason: "Signed id does not match receipt.id" };
+    if (signed.verdict !== 1) {
+      return { valid: false, reason: "Signed verdict is not 1 (the evaluated call was blocked)" };
+    }
+    return { valid: true };
+  } catch (err) {
+    return { valid: false, reason: `Verification error: ${(err as Error).message}` };
+  }
+}

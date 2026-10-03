@@ -381,6 +381,51 @@ Never throws — returns `{ valid: false, reason: string }` on any failure.
 
 ---
 
+### `RemoteForgeMemoryStore` (ramen forge community memory)
+
+`RemoteForgeMemoryStore` reads and contributes `CorrectionExemplar` records on
+[ramen forge](https://forge.ramenai.dev), so a repair learned by one agent can
+be recalled by another before its first tool call. Field names match
+ramen-foundry's Python `RemoteForgeMemoryStore`.
+
+```ts
+import { RemoteForgeMemoryStore, buildProvenance } from "@ramen-ai/node-core";
+
+const forge = new RemoteForgeMemoryStore({ domain: "fintech" }); // read-only without writeToken
+const lessons = await forge.retrieveRelevantExemplars({
+  toolName: "issue_credit_adverse_action",
+  query: "ZIP", // optional keyword search
+});
+```
+
+| Option | Default | Notes |
+|---|---|---|
+| `baseUrl` | `https://forge.ramenai.dev` | Must be `https` (plain `http` only for `localhost`). |
+| `writeToken` | — | Bearer token for writes. Never exposed by `toJSON()`. |
+| `domain` | `"general"` | Lowercase slug; override per call with `domain`. |
+| `timeoutMs` | `5000` | Per request. |
+
+- **Reads** (`GET /api/v1/exemplars`) fail open. Timeouts, connection
+  failures, HTTP errors, and malformed bodies log a warning and return `[]`.
+  Records for another domain or tool are skipped. A different task fingerprint
+  alone does not exclude a record. Invalid options throw before any request.
+- **Writes** (`recordCorrection`) require a `writeToken` and the complete
+  Schema V5 `receipt` of the allowed call. An exemplar with no receipt returns
+  `{ status: "skipped" }` without a request. The receipt's Ed25519 signature
+  and its signed `verdict === 1` are checked locally with
+  `verifyAllowReceiptSignature` before posting. The result is `created`,
+  `refreshed` (the forge already held the lesson and swapped in the new
+  receipt), or `duplicate` (HTTP 409); other rejections throw `ForgeWriteError`.
+
+Contributed records are publicly readable, and anyone with a write token can
+contribute, so treat recalled exemplars as untrusted guidance. The ramen-ai
+policy boundary still evaluates every call.
+
+`buildProvenance` returns a `RamenProvenanceEnvelope`, the same shape
+ramen-foundry attaches as `_ramen_provenance`. `audit_uri` is a filtered
+listing (domain, tool, task fingerprint) that returns the lesson with its
+signature, because ramen forge cannot look records up by exemplar id.
+
 ## Error handling
 
 `evaluateCompliance` is **fail-closed**: any error (network timeout, DNS
@@ -528,5 +573,6 @@ npm run typecheck  # tsc --noEmit
 |---|---|
 | `ramen__shield_core_it` | Destructive execution, infrastructure abuse, prompt leakage & jailbreak, secret exfiltration, OWASP ASI-06 indirect injection |
 | `ramen__eu_ai_act_baseline` | EU AI Act Articles 5, 10, and 50 — prohibited practices, data governance, transparency obligations |
+| `ramen__industrial_iot_actuation_invariance` | Industrial actuation invariants, including Robotics Physical Safety & Biomechanical Invariance (`1fc71052-eb7e-43fe-9bfa-7ee06afe5b95`). Exported as `INDUSTRIAL_IOT_ACTUATION_INVARIANCE_BUNDLE_ID`; the server resolves membership on each call. |
 
 Full bundle reference: [https://ramenai.dev/pricing](https://ramenai.dev/pricing)
