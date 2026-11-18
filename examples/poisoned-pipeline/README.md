@@ -81,7 +81,7 @@ The terminal reports:
 Model execution terminated.
 ```
 
-This runtime boundary does not replace representative data, fairness testing, model review or human oversight. It adds an enforceable control for cases where unsafe attribution evidence reaches the inference boundary.
+This runtime boundary adds an enforceable control for cases where unsafe attribution evidence reaches the inference boundary.
 
 The model achieved 94.2% accuracy because it learned the poisoned labels correctly. SHAP exposed the shortcut. The runtime boundary prevented that shortcut from producing a governed prediction.
 

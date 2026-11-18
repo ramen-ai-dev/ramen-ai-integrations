@@ -151,7 +151,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: ramen-ai PR Compliance Interceptor
-        uses: ramen-ai-dev/ramen-ai-integrations/plugins/github-action@master
+        uses: ramen-ai-dev/ramen-ai-action@v1.0.3
         with:
           ramen_api_key: ${{ secrets.RAMEN_API_KEY }}
           bundle_ids: ramen__eu_ai_act_baseline,ramen__shield_core_it
@@ -184,7 +184,7 @@ to the correct provider. Without a provider key, evaluations return
 
 ```yaml
       - name: ramen-ai PR Compliance Interceptor
-        uses: ramen-ai-dev/ramen-ai-integrations/plugins/github-action@master
+        uses: ramen-ai-dev/ramen-ai-action@v1.0.3
         with:
           ramen_api_key: ${{ secrets.RAMEN_API_KEY }}
           bundle_ids: "ramen__shield_core_it"
@@ -268,7 +268,7 @@ jobs:
           fetch-depth: 2
 
       - name: Evaluate PR with Ramen AI
-        uses: ramen-ai-dev/ramen-ai-integrations/plugins/github-action@master
+        uses: ramen-ai-dev/ramen-ai-action@v1.0.3
         with:
           ramen_api_key: ${{ secrets.RAMEN_API_KEY }}
           bundle_ids: "ramen__shield_core_it"

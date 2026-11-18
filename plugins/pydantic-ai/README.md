@@ -249,3 +249,10 @@ two end-to-end integration tests through a real PydanticAI `TestModel` agent run
 |---|---|
 | `ramen__shield_core_it` | Destructive execution, prompt injection, secret exfiltration, OWASP ASI-06 |
 | `ramen__eu_ai_act_baseline` | EU AI Act Articles 5, 10, and 50 |
+| `ramen__fintech_banking_invariance` | Credit adverse action and commercial wire dual control |
+| `ramen__industrial_iot_actuation_invariance` | Industrial actuation invariants and robotics physical safety |
+| `ramen__financial_authorization_invariance` | Corporate spend authorization and dual control |
+| `ramen__contractual_eligibility_invariance` | Contractual eligibility, exclusion clauses and verified evidence |
+| `ramen__compliance_provenance_invariance` | Compliance provenance and evidence traceability |
+
+The fintech banking, industrial actuation, financial authorization, contractual eligibility and compliance provenance bundles are enterprise tier.

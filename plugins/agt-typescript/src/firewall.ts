@@ -29,8 +29,7 @@ import type {
   ExternalPolicyBackend,
   LegacyPolicyDecision,
 } from "@microsoft/agent-governance-sdk";
-import type { RamenClient } from "./client.js";
-import type { ComplianceVerdict, RamenReceipt } from "./types.js";
+import type { ComplianceVerdict, RamenClient, RamenReceipt } from "@ramen-ai/node-core";
 
 /** Keys checked, in order, when extracting input text from an AGT context. */
 const INPUT_KEYS = ["input", "input_text", "content", "message", "prompt"] as const;

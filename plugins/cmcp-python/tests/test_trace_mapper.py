@@ -16,6 +16,7 @@ from cryptography.hazmat.primitives.serialization import (
 from trace_tests.result import Status
 from trace_tests.runner import run as run_trace_tests
 
+from ramen_cmcp import _receipt_verify
 from ramen_cmcp._receipt_verify import verify_v5_receipt
 from ramen_cmcp.trace_mapper import (
     EAT_PROFILE,
@@ -34,6 +35,12 @@ BUILD_PROVENANCE = {
     "digest": BUILD_DIGEST,
 }
 APPRAISAL_VERIFIER = "https://ramenai.dev/trace/software-only"
+# Conformance-document key (v5-conformance.md section 3.2). It is not trusted by
+# default; every test that verifies the fixture vectors passes it explicitly.
+EPHEMERAL_KID = "ramen_pk_ephemeral_test"
+EPHEMERAL_KEYS = {
+    EPHEMERAL_KID: "MCowBQYDK2VwAyEACmDytPXlfjKUMgV5l4w31xHt/G5p30UsNm/AmOI9OaM=",
+}
 
 
 def _load(name: str) -> dict:
@@ -65,17 +72,22 @@ def _build(fixture: dict, *, iat: int) -> dict:
         policy_bundle_hash=POLICY_BUNDLE_HASH,
         build_provenance=BUILD_PROVENANCE,
         appraisal_verifier=APPRAISAL_VERIFIER,
+        extra_keys=EPHEMERAL_KEYS,
     )
 
 
 class TestVerifyV5Receipt:
     def test_vector1_allowed_valid(self):
         fixture = _load("vector1_allowed.json")
-        assert verify_v5_receipt(fixture["receipt"], fixture["input"]) == (True, None)
+        assert verify_v5_receipt(
+            fixture["receipt"], fixture["input"], extra_keys=EPHEMERAL_KEYS
+        ) == (True, None)
 
     def test_vector2_blocked_valid(self):
         fixture = _load("vector2_blocked.json")
-        assert verify_v5_receipt(fixture["receipt"], fixture["input"]) == (True, None)
+        assert verify_v5_receipt(
+            fixture["receipt"], fixture["input"], extra_keys=EPHEMERAL_KEYS
+        ) == (True, None)
 
     def test_payload_hashes_bind_original_inputs(self):
         for name in ("vector1_allowed.json", "vector2_blocked.json"):
@@ -87,14 +99,16 @@ class TestVerifyV5Receipt:
 
     def test_tampered_signature_fails(self):
         fixture = _load("vector_n1_bad_sig.json")
-        valid, reason = verify_v5_receipt(fixture["receipt"], fixture["input"])
+        valid, reason = verify_v5_receipt(
+            fixture["receipt"], fixture["input"], extra_keys=EPHEMERAL_KEYS
+        )
         assert valid is False
         assert "signature" in (reason or "").lower()
 
     def test_wrong_input_fails_binding(self):
         fixture = _load("vector1_allowed.json")
         valid, reason = verify_v5_receipt(
-            fixture["receipt"], fixture["input"] + " "
+            fixture["receipt"], fixture["input"] + " ", extra_keys=EPHEMERAL_KEYS
         )
         assert valid is False
         assert "payload_hash" in (reason or "")
@@ -102,11 +116,46 @@ class TestVerifyV5Receipt:
     def test_unknown_kid_fails(self):
         fixture = _load("vector1_allowed.json")
         receipt = dict(fixture["receipt"], kid="ramen_pk_unknown_xyz")
-        valid, reason = verify_v5_receipt(receipt, fixture["input"])
+        valid, reason = verify_v5_receipt(
+            receipt, fixture["input"], extra_keys=EPHEMERAL_KEYS
+        )
         assert valid is False
         assert "Unknown kid" in (reason or "")
 
 
+class TestDefaultKeyRegistry:
+    """Only the production key is trusted unless a caller passes test keys."""
+    def test_registry_contains_only_production_key(self):
+        assert set(_receipt_verify._AUDIT_PUBLIC_KEYS) == {"ramen_pk_v1"}
+    def test_ephemeral_vectors_rejected_by_default(self):
+        for name in ("vector1_allowed.json", "vector2_blocked.json"):
+            fixture = _load(name)
+            valid, reason = verify_v5_receipt(fixture["receipt"], fixture["input"])
+            assert valid is False
+            assert f"Unknown kid: {EPHEMERAL_KID!r}" in (reason or "")
+    def test_extra_keys_cannot_replace_the_production_key(self):
+        fixture = _load("vector1_allowed.json")
+        receipt = dict(fixture["receipt"], kid="ramen_pk_v1")
+        valid, reason = verify_v5_receipt(
+            receipt,
+            fixture["input"],
+            extra_keys={"ramen_pk_v1": EPHEMERAL_KEYS[EPHEMERAL_KID]},
+        )
+        assert valid is False
+        assert "signature" in (reason or "").lower()
+    def test_ephemeral_signed_receipt_is_never_trace_signed_by_default(self, trace_key):
+        fixture = _load("vector1_allowed.json")
+        with pytest.raises(ValueError, match="Unknown kid"):
+            build_trace_record(
+                fixture["receipt"],
+                original_input=fixture["input"],
+                iat=1_800_000_000,
+                model=MODEL,
+                data_class="internal",
+                policy_bundle_hash=POLICY_BUNDLE_HASH,
+                build_provenance=BUILD_PROVENANCE,
+                appraisal_verifier=APPRAISAL_VERIFIER,
+            )
 class TestBuildTraceRecord:
     @pytest.fixture
     def allowed_record(self, trace_key):
@@ -193,6 +242,7 @@ class TestBuildTraceRecord:
                 policy_bundle_hash="not-a-digest",
                 build_provenance=BUILD_PROVENANCE,
                 appraisal_verifier=APPRAISAL_VERIFIER,
+                extra_keys=EPHEMERAL_KEYS,
             )
 
     def test_receipt_identity_must_match_signed_payload(self, trace_key):

@@ -64,7 +64,7 @@ This integration emits **TRACE Level 0** records only:
 ## Public API
 
 - `RamenCmcpAdapter.evaluate(tool_call_payload)` evaluates a cMCP `tools/call` payload and returns an `AdapterDecision`.
-- `verify_v5_receipt(receipt, original_input)` verifies the V5 Ed25519 receipt and its SHA-256 input binding.
+- `verify_v5_receipt(receipt, original_input)` verifies the V5 Ed25519 receipt and its SHA-256 input binding. Only `ramen_pk_v1` is trusted by default; `extra_keys` adds conformance or test keys and cannot replace `ramen_pk_v1`.
 - `build_trace_record(receipt, original_input=..., ...)` verifies the V5 receipt, requires caller-owned evidence that the receipt cannot supply, loads the dedicated TRACE key, and returns a natively signed TRACE v0.2 record.
 
 ## Requirements

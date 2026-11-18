@@ -17,7 +17,7 @@
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
-    "@ramen-ai/node-core": "0.3.2",
+    "@ramen-ai/node-core": "0.3.4",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "zod": "3.24.2"

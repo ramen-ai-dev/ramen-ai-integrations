@@ -9,8 +9,25 @@
  */
 
 export const SHIELD_CORE_IT_BUNDLE_ID = "ramen__shield_core_it";
+export const EU_AI_ACT_BASELINE_BUNDLE_ID = "ramen__eu_ai_act_baseline";
 export const FINTECH_BANKING_INVARIANCE_BUNDLE_ID = "ramen__fintech_banking_invariance";
 export const INDUSTRIAL_IOT_ACTUATION_INVARIANCE_BUNDLE_ID = "ramen__industrial_iot_actuation_invariance";
+/** Corporate spend authorization: platform limits, ERP clearance, dual control. */
+export const FINANCIAL_AUTHORIZATION_INVARIANCE_BUNDLE_ID = "ramen__financial_authorization_invariance";
+/** Contractual eligibility and exclusion: coverage dates, exclusions, verified evidence. */
+export const CONTRACTUAL_ELIGIBILITY_INVARIANCE_BUNDLE_ID = "ramen__contractual_eligibility_invariance";
+/** Compliance provenance: verified evidence tokens before regulated records move. */
+export const COMPLIANCE_PROVENANCE_INVARIANCE_BUNDLE_ID = "ramen__compliance_provenance_invariance";
+/** Production bundle slugs covered by these constants. Membership is resolved server-side. */
+export const PRODUCTION_BUNDLE_IDS: readonly string[] = Object.freeze([
+  SHIELD_CORE_IT_BUNDLE_ID,
+  EU_AI_ACT_BASELINE_BUNDLE_ID,
+  FINTECH_BANKING_INVARIANCE_BUNDLE_ID,
+  INDUSTRIAL_IOT_ACTUATION_INVARIANCE_BUNDLE_ID,
+  FINANCIAL_AUTHORIZATION_INVARIANCE_BUNDLE_ID,
+  CONTRACTUAL_ELIGIBILITY_INVARIANCE_BUNDLE_ID,
+  COMPLIANCE_PROVENANCE_INVARIANCE_BUNDLE_ID,
+]);
 
 /** Credit adverse action (ECOA Regulation B / CFPB Circular 2023-03). */
 export const CREDIT_ADVERSE_ACTION_POLICY_ID = "796b7a87-d1f5-4ecc-91f2-a506a9b0d91e";

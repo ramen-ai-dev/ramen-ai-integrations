@@ -220,7 +220,7 @@ try {
 `maxRetries` defaults to `1` and accepts only `0` or `1`; it counts additional
 generations, so at most two candidates are generated. The clients do not replay
 transport failures. Governed completion means the server reported strict policy
-approval; it is not a claim of factual correctness or legal compliance.
+approval.
 
 #### Governed-generation method signatures
 
@@ -573,6 +573,14 @@ npm run typecheck  # tsc --noEmit
 |---|---|
 | `ramen__shield_core_it` | Destructive execution, infrastructure abuse, prompt leakage & jailbreak, secret exfiltration, OWASP ASI-06 indirect injection |
 | `ramen__eu_ai_act_baseline` | EU AI Act Articles 5, 10, and 50 — prohibited practices, data governance, transparency obligations |
+| `ramen__fintech_banking_invariance` | Credit adverse action (ECOA Regulation B) and commercial wire dual control (UCC Article 4A) |
 | `ramen__industrial_iot_actuation_invariance` | Industrial actuation invariants, including Robotics Physical Safety & Biomechanical Invariance (`1fc71052-eb7e-43fe-9bfa-7ee06afe5b95`). Exported as `INDUSTRIAL_IOT_ACTUATION_INVARIANCE_BUNDLE_ID`; the server resolves membership on each call. |
+| `ramen__financial_authorization_invariance` | Corporate spend authorization: platform limits, open ERP budget clearance, out-of-band dual control approvals |
+| `ramen__contractual_eligibility_invariance` | Contractual eligibility and exclusion: coverage dates, exclusion clauses, verified inspection evidence, scheduled limits |
+| `ramen__compliance_provenance_invariance` | Compliance provenance and evidence traceability: verified, current evidence tokens before regulated records are submitted or routed |
+
+The fintech banking, industrial actuation, financial authorization, contractual eligibility and compliance provenance bundles are enterprise tier.
+
+Every slug above is exported as a `*_BUNDLE_ID` constant, and `PRODUCTION_BUNDLE_IDS` lists them all.
 
 Full bundle reference: [https://ramenai.dev/pricing](https://ramenai.dev/pricing)

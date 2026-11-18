@@ -287,6 +287,13 @@ curl -H "Authorization: Bearer $RAMEN_API_KEY" https://api.ramenai.dev/api/v1/sa
 |---|---|
 | `ramen__shield_core_it` | IT-security baseline — destructive execution, injections, unauthorized transfers |
 | `ramen__eu_ai_act_baseline` | EU AI Act compliance baseline |
+| `ramen__fintech_banking_invariance` | Credit adverse action and commercial wire dual control |
+| `ramen__industrial_iot_actuation_invariance` | Industrial actuation invariants and robotics physical safety |
+| `ramen__financial_authorization_invariance` | Corporate spend authorization and dual control |
+| `ramen__contractual_eligibility_invariance` | Contractual eligibility, exclusion clauses and verified evidence |
+| `ramen__compliance_provenance_invariance` | Compliance provenance and evidence traceability |
+
+The fintech banking, industrial actuation, financial authorization, contractual eligibility and compliance provenance bundles are enterprise tier.
 
 ---
 
@@ -294,15 +301,16 @@ curl -H "Authorization: Bearer $RAMEN_API_KEY" https://api.ramenai.dev/api/v1/sa
 
 ```bash
 npm run build      # tsc -> dist/
-npm test           # vitest: verifier, firewall, and V5 conformance suites
+npm test           # vitest: firewall and provider-option suites
 npm run typecheck  # strict no-emit type check
 ```
 
-The test suite includes a **V5 cryptographic conformance** suite
-([`tests/conformance.test.ts`](./tests/conformance.test.ts)) that verifies the
-official vectors from the backend's V5 conformance pack, plus
-fail-closed behaviour tests for policy blocks, unverifiable receipts, and API
-errors.
+The HTTP client and V5 receipt verifier come from
+[`@ramen-ai/node-core`](../../core-clients/node), which this package re-exports.
+The V5 cryptographic conformance vectors are tested there
+([`verifier.test.mjs`](../../core-clients/node/test/verifier.test.mjs)). This
+package's suite covers fail-closed behaviour for policy blocks, unverifiable
+receipts, and API errors.
 
 ## License
 

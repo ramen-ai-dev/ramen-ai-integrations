@@ -4,18 +4,28 @@
  * ramen-ai L2 Semantic Firewall middleware for the Microsoft Agent Governance
  * Toolkit (TypeScript SDK). Public surface:
  *
- *   - RamenClient            — HTTP client for POST /api/v1/paas/evaluate
- *   - verifyReceipt          — V5 Ed25519 receipt verification (Web Crypto)
+ *   - RamenClient            — re-exported from @ramen-ai/node-core
+ *   - verifyReceipt          — re-exported from @ramen-ai/node-core (V5 Ed25519)
  *   - RamenFirewallBackend   — AGT ExternalPolicyBackend implementation
  *   - GovernanceDenied       — error thrown by governAction() on a block
  *   - ReceiptLedger          — binds receipts to AGT audit-chain hashes
  */
-
-export { RamenClient } from "./client.js";
-export type { RamenClientOptions, EvaluateOptions } from "./client.js";
-
-export { verifyReceipt, sha256Hex, AUDIT_PUBLIC_KEYS } from "./verifier.js";
-
+export {
+  RamenClient,
+  verifyReceipt,
+  sha256Hex,
+  AUDIT_PUBLIC_KEYS,
+} from "@ramen-ai/node-core";
+export type {
+  RamenClientOptions,
+  EvaluateOptions,
+  RamenReceipt,
+  Violation,
+  PolicyResult,
+  EvaluationResponse,
+  VerificationResult,
+  ComplianceVerdict,
+} from "@ramen-ai/node-core";
 export {
   RamenFirewallBackend,
   GovernanceDenied,
@@ -23,12 +33,3 @@ export {
   extractInputText,
 } from "./firewall.js";
 export type { RamenFirewallOptions, LedgerRecord } from "./firewall.js";
-
-export type {
-  RamenReceipt,
-  Violation,
-  PolicyResult,
-  EvaluationResponse,
-  VerificationResult,
-  ComplianceVerdict,
-} from "./types.js";

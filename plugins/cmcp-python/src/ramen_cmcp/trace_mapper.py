@@ -39,6 +39,7 @@ def build_trace_record(
     policy_bundle_hash: str,
     build_provenance: dict[str, Any],
     appraisal_verifier: str,
+    extra_keys: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Verify a V5 receipt, then build and sign a software-only TRACE v0.2 record.
 
@@ -50,9 +51,12 @@ def build_trace_record(
     The dedicated Ed25519 signing key is loaded from ``TRACE_PRIVATE_KEY_PEM``.
     There is deliberately no ephemeral-key fallback and no use of the ramen-ai
     receipt verification keys.
+
+    Only ``ramen_pk_v1`` is trusted by default. ``extra_keys`` exists for
+    conformance vectors and tests; production callers must not pass it.
     """
     _validate_receipt(receipt)
-    valid, reason = verify_v5_receipt(receipt, original_input)
+    valid, reason = verify_v5_receipt(receipt, original_input, extra_keys=extra_keys)
     if not valid:
         raise ValueError(f"V5 receipt verification failed: {reason}")
 

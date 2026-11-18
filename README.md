@@ -174,6 +174,13 @@ The Free Starter Tier includes the **Core IT Security** bundle:
 |---|---|
 | `ramen__shield_core_it` | Destructive execution, infrastructure abuse, prompt leakage & jailbreak, secret exfiltration, OWASP ASI-06 indirect injection |
 | `ramen__eu_ai_act_baseline` | EU AI Act Articles 5, 10, and 50 — prohibited practices, data governance, transparency obligations |
+| `ramen__fintech_banking_invariance` | Credit adverse action (ECOA Regulation B) and commercial wire dual control (UCC Article 4A) |
+| `ramen__industrial_iot_actuation_invariance` | Industrial actuation invariants, including Robotics Physical Safety & Biomechanical Invariance |
+| `ramen__financial_authorization_invariance` | Corporate spend authorization: platform limits, open ERP budget clearance, out-of-band dual control approvals |
+| `ramen__contractual_eligibility_invariance` | Contractual eligibility and exclusion: coverage dates, exclusion clauses, verified inspection evidence, scheduled limits |
+| `ramen__compliance_provenance_invariance` | Compliance provenance and evidence traceability: verified, current evidence tokens before regulated records are submitted or routed |
+
+The fintech banking, industrial actuation, financial authorization, contractual eligibility and compliance provenance bundles are enterprise tier.
 
 Full bundle and policy reference: [https://ramenai.dev/pricing](https://ramenai.dev/pricing)
 

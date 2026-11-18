@@ -22,6 +22,12 @@ except ImportError as exc:
 from ramen_cmcp import build_trace_record, verify_v5_receipt
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "vector1_allowed.json"
+# The bundled fixtures are conformance vectors signed by the document-build key
+# (v5-conformance.md section 3.2). That key is not trusted by default, so this
+# example passes it explicitly. Real receipts are signed by ramen_pk_v1.
+CONFORMANCE_KEYS = {
+    "ramen_pk_ephemeral_test": "MCowBQYDK2VwAyEACmDytPXlfjKUMgV5l4w31xHt/G5p30UsNm/AmOI9OaM=",
+}
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -46,7 +52,9 @@ def main() -> int:
     fixture = json.loads(Path(args.fixture).read_text(encoding="utf-8"))
     receipt: dict = fixture["receipt"]
 
-    valid, reason = verify_v5_receipt(receipt, fixture["input"])
+    valid, reason = verify_v5_receipt(
+        receipt, fixture["input"], extra_keys=CONFORMANCE_KEYS
+    )
     if not valid:
         print(f"ERROR: fixture receipt failed verification: {reason}", file=sys.stderr)
         return 1
@@ -74,6 +82,7 @@ def main() -> int:
         policy_bundle_hash=args.policy_bundle_hash,
         build_provenance=build_provenance,
         appraisal_verifier=args.appraisal_verifier,
+        extra_keys=CONFORMANCE_KEYS,
     )
 
     pem = os.environ.get("TRACE_PRIVATE_KEY_PEM")

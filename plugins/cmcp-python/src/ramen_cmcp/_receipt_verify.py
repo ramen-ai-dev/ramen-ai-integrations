@@ -18,11 +18,10 @@ Normative algorithm (v5-conformance.md §4.3):
 
 Key registry
 ────────────
-The production key (ramen_pk_v1) and the ephemeral document-build key
-(ramen_pk_ephemeral_test) are embedded here.  Both are SPKI DER base64.
-
-    ramen_pk_v1             — active production key
-    ramen_pk_ephemeral_test — conformance-doc vectors only (§3.2)
+Only the production key (ramen_pk_v1, SPKI DER base64) is trusted by default.
+The conformance-document key (ramen_pk_ephemeral_test, §3.2) is never part of
+the default registry: callers that verify conformance vectors must pass it
+explicitly through ``extra_keys``.
 
 An unknown kid always returns (False, "Unknown kid: <value>").
 """
@@ -38,10 +37,9 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from cryptography.hazmat.primitives import serialization
 
-# SPKI DER base64 — sourced from v5-conformance.md §3
+# SPKI DER base64 — sourced from v5-conformance.md §3. Production key only.
 _AUDIT_PUBLIC_KEYS: dict[str, str] = {
     "ramen_pk_v1": "MCowBQYDK2VwAyEA8iTL9lJGYn2alGn1yMWVAIqLImTpADb9CqaLhisTuto=",
-    "ramen_pk_ephemeral_test": "MCowBQYDK2VwAyEACmDytPXlfjKUMgV5l4w31xHt/G5p30UsNm/AmOI9OaM=",
 }
 
 
@@ -65,9 +63,11 @@ def verify_v5_receipt(
             The exact UTF-8 string that was submitted to the evaluation API.
             Used to re-derive ``payload_hash`` for input-binding verification.
         extra_keys:
-            Optional additional SPKI DER base64 keys keyed by ``kid``.
-            Merged with the built-in registry; caller-supplied keys take
-            precedence.
+            Optional additional SPKI DER base64 keys keyed by ``kid``, for
+            conformance vectors and tests only. Merged with the built-in
+            production registry. A key for a ``kid`` already in the built-in
+            registry (``ramen_pk_v1``) is ignored, so the production key
+            cannot be replaced. Production callers should not pass this.
 
     Returns:
         ``(True, None)`` on success.
@@ -91,7 +91,7 @@ def _verify(
     canonical_payload: str = receipt.get("canonical_payload", "")
 
     # ── Step 1: Ed25519 signature ──────────────────────────────────────────
-    key_registry = {**_AUDIT_PUBLIC_KEYS, **extra_keys}
+    key_registry = {**extra_keys, **_AUDIT_PUBLIC_KEYS}
     if kid not in key_registry:
         return False, f"Unknown kid: {kid!r}"
 

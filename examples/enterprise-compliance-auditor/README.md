@@ -55,7 +55,7 @@ For each record selected for the configured run, the application:
 
 Receipt signature validation, canonical-payload validation, input-hash binding, verdict binding, policy binding, and statutory-anchor binding are performed by `ramen-ai-core`. The example does not duplicate those security operations.
 
-The dashboard therefore demonstrates observed policy enforcement, not a guaranteed benchmark score. Exact blocked counts depend on the deployed bundle or proxy policy and backend configuration.
+The dashboard therefore demonstrates observed policy enforcement. Exact blocked counts depend on the deployed bundle or proxy policy and backend configuration.
 
 ## Setup
 

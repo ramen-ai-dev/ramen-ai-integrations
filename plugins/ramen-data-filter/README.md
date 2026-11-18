@@ -311,6 +311,13 @@ those policies and preserve the resolved policy IDs in the audit log.
 |---|---|
 | `ramen__shield_core_it` | Secret exfiltration, prompt leakage, jailbreaks, destructive instructions, and indirect prompt injection. |
 | `ramen__eu_ai_act_baseline` | EU AI Act data-governance, prohibited-practice, and transparency controls. |
+| `ramen__fintech_banking_invariance` | Credit adverse action notices and wire or payment instructions in financial datasets. |
+| `ramen__industrial_iot_actuation_invariance` | Actuation and control instructions in industrial or robotics telemetry datasets. |
+| `ramen__financial_authorization_invariance` | Spend, clearance and approval records that carry authorization claims. |
+| `ramen__contractual_eligibility_invariance` | Claim and eligibility records that carry coverage, exclusion or evidence claims. |
+| `ramen__compliance_provenance_invariance` | Regulated records that must carry verified evidence tokens. |
+
+The fintech banking, industrial actuation, financial authorization, contractual eligibility and compliance provenance bundles are enterprise tier.
 
 Pass explicit `policy_ids` for custom PII, ingestion, data-quality, or internal
 MLOps controls. Bundle and policy details are available at

@@ -9,9 +9,9 @@
 
 import { describe, it, expect } from "vitest";
 import { AuditLogger } from "@microsoft/agent-governance-sdk";
-import { RamenClient } from "../src/client.js";
+import { RamenClient } from "@ramen-ai/node-core";
+import type { EvaluationResponse } from "@ramen-ai/node-core";
 import { RamenFirewallBackend, GovernanceDenied } from "../src/firewall.js";
-import type { EvaluationResponse } from "../src/types.js";
 
 const TEST_VECTOR_KEYS = {
   ramen_pk_v1: "MCowBQYDK2VwAyEA+iHU+PeFqGZjeUmPSltNS5XNL9du7slfeWgkWGKAQZA=",
