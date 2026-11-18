@@ -7,6 +7,8 @@
  * Public surface:
  *   - RamenClient     — HTTP client for POST /api/v1/paas/evaluate
  *   - verifyReceipt   — V5 Ed25519 receipt verification (Web Crypto)
+ *   - signedVerdictProblem — strict signed ALLOW/BLOCK verification
+ *   - client.memory / client.bundles / client.receipts — Memory Mesh, bundle catalogue, receipt ledger
  *   - sha256Hex       — SHA-256 hex helper used by the verifier
  *   - RemoteForgeMemoryStore — ramen forge (community memory) HTTP client
  *   - RamenProvenanceEnvelope — shared `_ramen_provenance` envelope type
@@ -43,10 +45,41 @@ export type {
 export {
   verifyReceipt,
   verifyAllowReceiptSignature,
+  signedVerdictProblem,
   sha256Hex,
   AUDIT_PUBLIC_KEYS,
 } from "./verifier.js";
-export type { AllowReceiptCheck } from "./verifier.js";
+export type { AllowReceiptCheck, SignedVerdictBinding } from "./verifier.js";
+export { RamenApiError, ReceiptVerificationError } from "./errors.js";
+export { BundlesApi, ReceiptsApi, RECEIPTS_MAX_LIMIT } from "./resources.js";
+export type {
+  BundleSummary,
+  ListReceiptsOptions,
+  ReceiptLedgerEntry,
+  ReceiptLedgerPage,
+} from "./resources.js";
+export { MemoryMeshApi, assertSubTenantId } from "./memory/MemoryMesh.js";
+export type {
+  EraseResult,
+  FixRequest,
+  FixResult,
+  LessonList,
+  ListLessonsOptions,
+  MemoryCallOptions,
+  MemoryReceipt,
+  MemoryReviewDecision,
+  MemoryReviewStatus,
+  MemoryViolation,
+  RecallLesson,
+  RecallRequest,
+  RecallResult,
+  ReviewQueueLesson,
+  ReviewResult,
+  SubTenant,
+  SubTenantList,
+  TrapRequest,
+  TrapResult,
+} from "./memory/MemoryMesh.js";
 export {
   RemoteForgeMemoryStore,
   ForgeWriteError,

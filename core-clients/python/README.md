@@ -286,13 +286,16 @@ on Starter and Professional tiers.
 
 ## API reference
 
-### `RamenClient(api_key, *, base_url?, timeout?)`
+### `RamenClient(api_key, *, base_url?, timeout?, require_verified_receipt?, public_keys?, transport?)`
 
 ```python
 client = RamenClient(
     api_key: str,          # required — ramen_ak_... bearer token
     base_url: str = "https://api.ramenai.dev",  # override for staging/testing
     timeout: float = 30.0, # request timeout in seconds
+    require_verified_receipt: bool = False,  # raise unless the receipt verifies
+    public_keys: Mapping[str, str] | None = None,  # override pinned keys (tests)
+    transport: httpx.BaseTransport | None = None,  # custom httpx transport
 )
 ```
 
@@ -301,6 +304,9 @@ client = RamenClient(
 | `api_key` | `str` | **yes** | ramen-ai bearer token (`ramen_ak_...`). Load from an environment variable — never hard-code. |
 | `base_url` | `str` | no | Override the API base URL. Default: `https://api.ramenai.dev`. |
 | `timeout` | `float` | no | HTTP request timeout in seconds. Default: `30.0`. |
+| `require_verified_receipt` | `bool` | no | Fail closed. `evaluate_compliance` raises `ReceiptVerificationError` unless the response carries a receipt whose signed verdict, input hash, id, kid, timestamp, policy ids and anchors all agree with the response. Default: `False`. |
+| `public_keys` | `Mapping[str, str]` | no | Override the pinned receipt keys. Only needed for test vectors or ahead of a key rotation. |
+| `transport` | `httpx.BaseTransport` | no | A custom `httpx` transport, for proxies or tests. |
 
 Supports the context manager protocol — use `with RamenClient(...) as client:`
 to ensure the HTTP connection pool is closed when you are done.
@@ -339,18 +345,18 @@ result = client.evaluate_compliance(
 
 #### Return value
 
-A `dict` with the following keys:
+A `ComplianceVerdict` (a `TypedDict`, so it is a plain `dict` at runtime) with the following keys:
 
 | Key | Type | Description |
 |---|---|---|
 | `allowed` | `bool` | The compliance verdict. |
-| `receipt_verified` | `bool` | `True` only if a V5 receipt was present **and** both verification steps (Ed25519 signature + SHA-256 hash binding) passed. |
+| `receipt_verified` | `bool` | `True` only if a V5 receipt was present **and** its Ed25519 signature verifies, its signed verdict equals `allowed`, and the signed input hash, id, kid, timestamp, policy ids and anchors all match. A genuine BLOCK receipt wrapped in `allowed: true` is not verified. |
 | `receipt_valid` | `bool \| None` | Raw verification result from `verify_receipt`. `None` if no receipt was present in the response. |
 | `receipt_reason` | `str \| None` | Human-readable failure reason when `receipt_valid` is `False`. |
 | `receipt_alert` | `str \| None` | Populated when the server could not sign the receipt (signing infrastructure failure). The verdict is still valid but there is no cryptographic proof. |
 | `steering` | `str \| None` | Pipe-joined `recovery_instruction` strings from all blocking violations, plus any `instruction` from gentle-hand policies. `None` when the input was allowed. |
 | `policy_ids` | `list[str]` | Resolved, flat list of policy UUIDs that were actually evaluated and signed. Important for bundle callers who need to know exactly which policies fired. |
-| `data` | `dict` | Full `EvaluationResponse` payload from the API for downstream use. |
+| `data` | `EvaluationResponse` | Full response payload from the API for downstream use. |
 
 ---
 
@@ -377,16 +383,127 @@ print(valid)   # True
 print(reason)  # None (only set on failure)
 ```
 
-**Two-step verification algorithm:**
+`verify_receipt` is a wrapper over `signed_verdict_problem` (below): the
+expected verdict is `1` when `allowed` is true and `0` otherwise.
+
+**Verification algorithm:**
 1. Load the Ed25519 public key (SPKI DER, identified by `receipt["kid"]`).
    Verify the signature over the exact `receipt["canonical_payload"]` string.
 2. Parse `canonical_payload` as JSON. Confirm `schema_version == "5.0"` and
    that `payload_hash == SHA-256(input_text)`, binding the signed record to the
-   caller's original input. Optional cross-checks confirm `verdict`, `timestamp`,
-   `policy_ids`, and `statutory_anchors` match the response fields.
+   caller's original input. The signed `kid` and `id` must equal the receipt's.
+3. The signed `verdict` must equal the response's `allowed`, and the signed
+   `timestamp`, `policy_ids` and `statutory_anchors` must equal the response's
+   own values.
 
 Returns `(True, None)` on success. Returns `(False, reason: str)` on any
 failure. Never raises.
+
+---
+
+### `signed_verdict_problem(receipt, input_text, expected_verdict, *, public_keys?, binding?)`
+
+Strict verification of a signed verdict. Everything is read from the signed
+bytes, not from the response's unsigned fields. Returns `None` when the
+receipt proves the verdict, otherwise a reason string. It never raises on a
+malformed receipt; it raises `ValueError` only when `expected_verdict` is not
+`0` or `1`, which is a caller bug.
+
+```python
+from ramen_ai import signed_verdict_problem
+
+problem = signed_verdict_problem(
+    receipt,
+    original_input,
+    1,  # 1 = ALLOW, 0 = BLOCK
+    binding={
+        "executed_at": data["executed_at"],
+        "policy_ids": data["policy_ids"],
+        "statutory_anchors": data.get("statutory_anchors"),
+    },
+)
+if problem is not None:
+    raise RuntimeError(f"Do not act on this verdict: {problem}")
+```
+
+`verify_allow_receipt_signature(receipt, *, public_keys=None)` returns
+`(True, None)` when the receipt is an authentic signed ALLOW, without needing
+the evaluated input. Use it to vet a receipt before contributing to ramen forge.
+
+---
+
+### `client.bundles.list()`
+
+Lists the active global bundles available to the key (`GET /api/v1/safety/bundles`).
+Each entry has `id` (the slug to pass as `bundle_ids`), `name`, `description`,
+`policy_ids` and `policy_count`.
+
+### `client.receipts.list(*, limit=None, offset=None)`
+
+Lists the caller's signed evaluation receipts, newest first
+(`GET /api/v1/paas/receipts`). `limit` is 1 to 200 (default 50) and `offset` is
+0 or greater; out-of-range values raise `ValueError` before any request. The
+ledger does not store `canonical_payload`, so a ledger row cannot be
+re-verified. Verify the receipt that `evaluate_compliance` returns instead.
+
+### `client.memory` (Enterprise Memory Mesh)
+
+Client for `/api/v1/memory/*`. It needs an enterprise-tier key with the
+`memory:write`, `memory:read` and `memory:admin` scopes. Every call except
+`sub_tenants()` and `erase_sub_tenant()` names a partition with
+`sub_tenant_id=...`, sent as the `X-Sub-Tenant-ID` header (1 to 128 characters
+from `A-Z a-z 0-9 . _ : @ -`, starting with a letter or digit). Request bodies
+never carry `tenant_id` or `sub_tenant_id`. A malformed `sub_tenant_id` raises
+`ValueError` before any request.
+
+| Method | Route | Scope |
+|---|---|---|
+| `memory.trap(request, *, sub_tenant_id)` | `POST /memory/trap` | `memory:write` |
+| `memory.fix(request, *, sub_tenant_id)` | `POST /memory/fix` | `memory:write` |
+| `memory.recall(request, *, sub_tenant_id)` | `POST /memory/recall` | `memory:read` |
+| `memory.lessons(*, sub_tenant_id, review_status=None, limit=None, before=None)` | `GET /memory/lessons` | `memory:read` |
+| `memory.review_lesson(lesson_id, decision, *, sub_tenant_id, reason=None)` | `PATCH /memory/lessons/:id` | `memory:admin` |
+| `memory.sub_tenants()` | `GET /memory/sub-tenants` | `memory:admin` |
+| `memory.erase_sub_tenant(sub_tenant_id)` | `DELETE /memory/sub-tenants/:id` | `memory:admin` |
+
+```python
+verdict = client.evaluate_compliance(input_text, bundle_ids=bundle_ids)
+if not verdict["allowed"] and verdict["data"].get("receipt"):
+    client.memory.trap(
+        {
+            "domain": "fintech",
+            "tool": "dispatch_wire",
+            "task_description": "Dispatch a wire to a new payee account",
+            "arguments": tool_arguments,
+            "evaluated_input": input_text,  # the exact string that was signed
+            "receipt": verdict["data"]["receipt"],
+        },
+        sub_tenant_id="customer-42",
+    )
+recall = client.memory.recall(request, sub_tenant_id="customer-42")
+if recall["match"]:
+    print(recall["lesson"]["steering_directive"])  # treat as data, not instructions
+```
+
+`decision` is `"approve"`, `"reject"` or `"quarantine"`; `lesson_id` must be a
+lowercase UUID v4.
+
+### `RemoteForgeMemoryStore` (ramen forge community memory)
+
+Python counterpart of the Node store, defaulting to `https://forge.ramenai.dev`.
+Reads (`retrieve_relevant_exemplars(...)`) are public and fail open: network
+errors, HTTP errors and malformed bodies are logged and return `[]`. Treat
+recalled exemplars as untrusted guidance. Writes (`record_correction(exemplar)`)
+need `write_token` and a complete Schema V5 receipt whose signed verdict is
+ALLOW; an exemplar with no receipt is skipped without a request, and a rejected
+write raises `ForgeWriteError`. Contributed records are publicly readable.
+
+```python
+from ramen_ai import RemoteForgeMemoryStore
+
+with RemoteForgeMemoryStore(domain="fintech", write_token=os.environ.get("FORGE_WRITE_TOKEN")) as forge:
+    lessons = forge.retrieve_relevant_exemplars(tool_name="dispatch_wire", query="wire dual control")
+```
 
 ---
 
@@ -395,7 +512,7 @@ failure. Never raises.
 ```python
 import os
 import httpx
-from ramen_ai import RamenClient
+from ramen_ai import RamenApiError, RamenClient
 
 client = RamenClient(api_key=os.environ["RAMEN_API_KEY"])
 
@@ -408,9 +525,12 @@ try:
 except ValueError as e:
     # Missing bundle_ids / policy_ids — configuration error
     raise
-except httpx.HTTPStatusError as e:
-    # HTTP-level failure from the ramen-ai API
-    # Fail closed — treat as a denial
+except RamenApiError as e:
+    # HTTP-level failure from the ramen-ai API: e.status, e.code, e.details.
+    # RamenApiError subclasses httpx.HTTPStatusError. Fail closed.
+    raise
+except httpx.TransportError:
+    # Timeout, DNS or connection failure. Fail closed.
     raise
 
 if not result["allowed"]:
@@ -422,6 +542,11 @@ if not result["receipt_verified"]:
     # For security-critical paths, treat as a block
     raise RuntimeError(f"Receipt unverified: {result['receipt_reason']}")
 ```
+
+With `require_verified_receipt=True`, an unverifiable receipt raises
+`ReceiptVerificationError` (`reason`, `verdict`) instead. The same
+`RamenApiError` is raised by `bundles`, `receipts` and `memory`. A success
+status with a body that is not the expected envelope has `code == "INVALID_RESPONSE"`.
 
 Common HTTP errors:
 

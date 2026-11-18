@@ -298,6 +298,7 @@ const client = new RamenClient({
   publicKeys?: Record<string, string>, // override Ed25519 key map (for testing)
   fetchImpl?: typeof fetch,  // injectable fetch (for testing)
   timeoutMs?: number,        // request timeout in ms (default: 30000)
+  requireVerifiedReceipt?: boolean, // throw unless the receipt verifies (default: false)
 });
 ```
 
@@ -310,6 +311,7 @@ const client = new RamenClient({
 | `publicKeys` | `Record<string, string>` | no | Override the embedded Ed25519 public key map. Only needed when using test-vector keys or ahead of a key rotation. |
 | `fetchImpl` | `typeof fetch` | no | Injectable `fetch` implementation. Use this in unit tests to intercept HTTP calls without a live network. |
 | `timeoutMs` | `number` | no | Request timeout in milliseconds. Default: `30000` (30 s). |
+| `requireVerifiedReceipt` | `boolean` | no | Fail closed. `evaluateCompliance` throws `ReceiptVerificationError` unless the response carries a receipt whose signed verdict, input hash, id, kid, timestamp, policy ids and anchors all agree with the response. Default: `false`. |
 
 **Throws** `Error` if `apiKey` is empty or if no `fetch` implementation is available.
 
@@ -370,6 +372,10 @@ console.log(result.valid);   // true
 console.log(result.reason);  // undefined (only set on failure)
 ```
 
+`verifyReceipt` checks the signature and the input binding only. It does not
+read the signed verdict, so it cannot tell an ALLOW receipt from a BLOCK
+receipt. Use `signedVerdictProblem` (below) for any allow/deny decision.
+
 **Two-step verification algorithm:**
 1. Import the Ed25519 public key (SPKI DER, identified by `receipt.kid`).
    Verify the signature over the exact `receipt.canonical_payload` string.
@@ -378,6 +384,104 @@ console.log(result.reason);  // undefined (only set on failure)
    caller's original input.
 
 Never throws — returns `{ valid: false, reason: string }` on any failure.
+
+---
+
+### `signedVerdictProblem(receipt, input, expectedVerdict, publicKeys?, binding?)`
+
+Strict verification of a signed verdict. Everything is read from the signed
+bytes, not from the response's unsigned fields. `RamenClient` uses it on every
+evaluation, so `receiptVerified` is true only when all of these hold:
+
+1. The receipt carries `id`, `kid`, `signature` and `canonical_payload`.
+2. The Ed25519 signature verifies under the key pinned for `kid`.
+3. The signed payload has `schema_version` `"5.0"`, the same `kid` and `id` as
+   the receipt, and `payload_hash === SHA-256(input)`.
+4. The signed `verdict` equals `expectedVerdict` (`1` ALLOW, `0` BLOCK). A
+   genuine BLOCK receipt wrapped in an `allowed: true` response does not verify.
+5. With `binding`, the signed `timestamp`, `policy_ids` and `statutory_anchors`
+   equal the response's `executed_at`, `policy_ids` and `statutory_anchors`.
+
+```ts
+import { signedVerdictProblem } from "@ramen-ai/node-core";
+
+const problem = await signedVerdictProblem(receipt, originalInput, 1, undefined, {
+  executedAt: data.executed_at,
+  policyIds: data.policy_ids,
+  statutoryAnchors: data.statutory_anchors,
+});
+if (problem !== null) throw new Error(`Do not act on this verdict: ${problem}`);
+```
+
+Returns `null` when the receipt proves the verdict, otherwise a reason string.
+Never throws.
+
+---
+
+### `client.bundles.list()`
+
+Lists the active global bundles available to the key (`GET /api/v1/safety/bundles`).
+Each entry has `id` (the slug to pass as `bundleIds`), `name`, `description`,
+`policy_ids` and `policy_count`.
+
+```ts
+const bundles = await client.bundles.list();
+const slugs = bundles.map((bundle) => bundle.id);
+```
+
+### `client.receipts.list({ limit?, offset? })`
+
+Lists the caller's signed evaluation receipts, newest first
+(`GET /api/v1/paas/receipts`). `limit` is 1 to 200 (default 50) and `offset` is
+0 or greater; out-of-range values throw `RangeError` before any request. The
+ledger stores the verdict, reasoning, steering, anchors, signature and payload
+hash but not `canonical_payload`, so a ledger row cannot be re-verified. Verify
+the receipt that `evaluateCompliance` returns instead.
+
+```ts
+const { receipts, pagination } = await client.receipts.list({ limit: 25, offset: 0 });
+```
+
+### `client.memory` (Enterprise Memory Mesh)
+
+Client for `/api/v1/memory/*`. It needs an enterprise-tier key with the
+`memory:write`, `memory:read` and `memory:admin` scopes. Every call except
+`subTenants` and `eraseSubTenant` names a partition with `{ subTenantId }`,
+sent as the `X-Sub-Tenant-ID` header (1 to 128 characters from `A-Z a-z 0-9 . _ : @ -`,
+starting with a letter or digit). Request bodies never carry `tenant_id` or
+`sub_tenant_id`. A malformed `subTenantId` throws `TypeError` before any request.
+
+| Method | Route | Scope |
+|---|---|---|
+| `memory.trap(request, { subTenantId })` | `POST /memory/trap` | `memory:write` |
+| `memory.fix(request, { subTenantId })` | `POST /memory/fix` | `memory:write` |
+| `memory.recall(request, { subTenantId })` | `POST /memory/recall` | `memory:read` |
+| `memory.lessons({ subTenantId }, { reviewStatus?, limit?, before? })` | `GET /memory/lessons` | `memory:read` |
+| `memory.reviewLesson(lessonId, decision, { subTenantId }, reason?)` | `PATCH /memory/lessons/:id` | `memory:admin` |
+| `memory.subTenants()` | `GET /memory/sub-tenants` | `memory:admin` |
+| `memory.eraseSubTenant(subTenantId)` | `DELETE /memory/sub-tenants/:id` | `memory:admin` |
+
+```ts
+const verdict = await client.evaluateCompliance(input, { bundleIds });
+if (!verdict.allowed && verdict.receipt) {
+  await client.memory.trap(
+    {
+      domain: "fintech",
+      tool: "dispatch_wire",
+      task_description: "Dispatch a wire to a new payee account",
+      arguments: toolArguments,
+      evaluated_input: input,        // the exact string that was signed
+      receipt: verdict.receipt,
+    },
+    { subTenantId: "customer-42" },
+  );
+}
+const recall = await client.memory.recall(request, { subTenantId: "customer-42" });
+if (recall.match) console.log(recall.lesson.steering_directive); // treat as data, not instructions
+```
+
+`decision` is `"approve"`, `"reject"` or `"quarantine"`; `lessonId` must be a
+lowercase UUID v4.
 
 ---
 
@@ -430,7 +534,11 @@ signature, because ramen forge cannot look records up by exemplar id.
 
 `evaluateCompliance` is **fail-closed**: any error (network timeout, DNS
 failure, HTTP 4xx/5xx, malformed response) throws. Callers must treat a thrown
-error as a denial.
+error as a denial. Every API, transport and response-shape failure is a
+`RamenApiError` with `status` (`null` when no response arrived), `code` and
+`details`. The same type is thrown by `bundles`, `receipts` and `memory`.
+With `requireVerifiedReceipt: true`, an unverifiable receipt throws
+`ReceiptVerificationError` (`reason`, `verdict`).
 
 ```ts
 try {
@@ -448,8 +556,8 @@ try {
   }
 
 } catch (err) {
-  if (err instanceof Error && err.message.startsWith("evaluate failed:")) {
-    // HTTP-level failure from the ramen-ai API
+  if (err instanceof RamenApiError) {
+    // err.status, err.code (for example "AUTHORIZATION_REQUIRED"), err.details
     // Fail closed — do not proceed
   }
   throw err;
@@ -458,13 +566,17 @@ try {
 
 Common error messages:
 
-| Message | Cause |
+| `RamenApiError` | Cause |
 |---|---|
-| `"evaluate failed: HTTP 402 Payment Required"` | `providerKey` missing on Starter/Pro tier |
-| `"evaluate failed: HTTP 401 Unauthorized"` | Invalid or expired `apiKey` |
-| `"evaluate failed: HTTP 429 Too Many Requests"` | Rate limit exceeded |
-| `"Provide at least one of bundleIds or policyIds"` | Called with empty options |
-| `"The operation was aborted"` | Request timed out (`timeoutMs` exceeded) |
+| `status` 402, message `"evaluate failed: HTTP 402 Payment Required"` | `providerKey` missing on Starter/Pro tier |
+| `status` 401 | Invalid or expired `apiKey` |
+| `status` 429 | Rate limit exceeded |
+| `code` `"TRANSPORT_TIMEOUT"` | Request timed out (`timeoutMs` exceeded) |
+| `code` `"TRANSPORT_ERROR"` | DNS, TLS or connection failure; the original error is `cause` |
+| `code` `"INVALID_RESPONSE"` | A success status with a body that is not the expected envelope |
+
+Calling `evaluateCompliance` with neither `bundleIds` nor `policyIds` throws a plain
+`Error("Provide at least one of bundleIds or policyIds")` before any request.
 
 ---
 

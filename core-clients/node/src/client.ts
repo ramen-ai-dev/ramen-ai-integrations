@@ -20,7 +20,11 @@ import type {
   GovernedCompleteData,
   GovernedStreamEvent,
 } from "./governed-types.js";
-import { verifyReceipt, AUDIT_PUBLIC_KEYS } from "./verifier.js";
+import { signedVerdictProblem, AUDIT_PUBLIC_KEYS } from "./verifier.js";
+import { RamenApiError, ReceiptVerificationError } from "./errors.js";
+import { parseErrorBody, transportError, type Transport } from "./http.js";
+import { MemoryMeshApi } from "./memory/MemoryMesh.js";
+import { BundlesApi, ReceiptsApi } from "./resources.js";
 
 const DEFAULT_BASE_URL = "https://api.ramenai.dev";
 const EVALUATE_PATH = "/api/v1/paas/evaluate";
@@ -61,6 +65,13 @@ export interface RamenClientOptions {
   fetchImpl?: typeof fetch;
   /** Request timeout in ms (default 30000). */
   timeoutMs?: number;
+  /**
+   * Fail closed on evaluation: when true, `evaluateCompliance` throws
+   * {@link ReceiptVerificationError} unless the response carries a receipt
+   * whose signed verdict, input hash, id, kid, timestamp, policy ids and
+   * anchors all agree with the response. Default false.
+   */
+  requireVerifiedReceipt?: boolean;
 }
 
 export interface AttestationPayload {
@@ -85,6 +96,14 @@ export class RamenClient {
   private readonly publicKeys: Record<string, string>;
   private readonly fetchImpl: typeof fetch;
   private readonly timeoutMs: number;
+  private readonly requireVerifiedReceipt: boolean;
+
+  /** Enterprise Memory Mesh (`/api/v1/memory/*`). */
+  readonly memory: MemoryMeshApi;
+  /** Global bundle catalogue (`GET /api/v1/safety/bundles`). */
+  readonly bundles: BundlesApi;
+  /** Signed receipt ledger (`GET /api/v1/paas/receipts`). */
+  readonly receipts: ReceiptsApi;
 
   constructor(opts: RamenClientOptions) {
     if (!opts.apiKey) throw new Error("RamenClient requires a non-empty apiKey");
@@ -95,17 +114,28 @@ export class RamenClient {
     this.publicKeys = opts.publicKeys ?? AUDIT_PUBLIC_KEYS;
     this.fetchImpl = opts.fetchImpl ?? globalThis.fetch;
     this.timeoutMs = opts.timeoutMs ?? 30_000;
+    this.requireVerifiedReceipt = opts.requireVerifiedReceipt ?? false;
     if (typeof this.fetchImpl !== "function") {
       throw new Error("No fetch implementation available; pass opts.fetchImpl");
     }
+    const transport: Transport = {
+      apiKey: this.apiKey,
+      baseUrl: this.baseUrl,
+      fetchImpl: this.fetchImpl,
+      timeoutMs: this.timeoutMs,
+    };
+    this.memory = new MemoryMeshApi(transport);
+    this.bundles = new BundlesApi(transport);
+    this.receipts = new ReceiptsApi(transport);
   }
 
   /**
    * Evaluate `input` against the given policies/bundles, verify the receipt,
    * and return a normalized verdict.
    *
-   * Fail-closed: any transport or parse error throws; callers must treat a
-   * thrown error as a denial.
+   * Fail-closed: any transport or parse error throws a {@link RamenApiError};
+   * callers must treat a thrown error as a denial. With `requireVerifiedReceipt`
+   * an unverifiable receipt throws a {@link ReceiptVerificationError}.
    */
   async evaluateCompliance(input: string, opts: EvaluateOptions = {}): Promise<ComplianceVerdict> {
     if (!opts.bundleIds?.length && !opts.policyIds?.length) {
@@ -119,7 +149,11 @@ export class RamenClient {
     if (opts.attestation !== undefined) body.attestation = opts.attestation;
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, this.timeoutMs);
     let envelope: { data?: EvaluationResponse };
     try {
       const headers: Record<string, string> = {
@@ -142,17 +176,37 @@ export class RamenClient {
         signal: controller.signal,
       });
       if (!res.ok) {
-        throw new Error(`evaluate failed: HTTP ${res.status} ${res.statusText}`);
+        const parsed = parseErrorBody(await res.text().catch(() => ""), res.status, res.statusText);
+        throw new RamenApiError(
+          res.status,
+          parsed.code,
+          `evaluate failed: HTTP ${res.status} ${res.statusText}`,
+          parsed.details,
+        );
       }
-      envelope = (await res.json()) as { data?: EvaluationResponse };
+      try {
+        envelope = (await res.json()) as { data?: EvaluationResponse };
+      } catch (error) {
+        throw new RamenApiError(res.status, "INVALID_RESPONSE", "evaluate response was not valid JSON", undefined, error);
+      }
+    } catch (error) {
+      if (error instanceof RamenApiError) throw error;
+      throw transportError(error, timedOut);
     } finally {
       clearTimeout(timer);
     }
 
-    const data = envelope.data;
-    if (!data) throw new Error("evaluate response missing data envelope");
+    const data = envelope?.data;
+    if (!data) throw new RamenApiError(200, "INVALID_RESPONSE", "evaluate response missing data envelope");
 
-    return this.normalize(data, input);
+    const verdict = await this.normalize(data, input);
+    if (this.requireVerifiedReceipt && !verdict.receiptVerified) {
+      throw new ReceiptVerificationError(
+        verdict.receiptReason ?? verdict.receiptAlert ?? "no Schema V5 receipt was returned",
+        verdict,
+      );
+    }
+    return verdict;
   }
 
   /** Generate content and return it only after strict governance approval. */
@@ -198,9 +252,15 @@ export class RamenClient {
     let receiptVerified = false;
     let receiptReason: string | undefined;
     if (receipt?.canonical_payload) {
-      const result = await verifyReceipt(receipt, input, this.publicKeys);
-      receiptVerified = result.valid;
-      receiptReason = result.reason;
+      // The signed verdict must match the response's own `allowed`, and the
+      // signed timestamp, policy ids and anchors must match the response.
+      const problem = await signedVerdictProblem(receipt, input, data.allowed === true ? 1 : 0, this.publicKeys, {
+        executedAt: data.executed_at,
+        policyIds: data.policy_ids ?? [],
+        statutoryAnchors: data.statutory_anchors ?? [],
+      });
+      receiptVerified = problem === null;
+      receiptReason = problem ?? undefined;
     }
 
     const steeringParts: string[] = [];

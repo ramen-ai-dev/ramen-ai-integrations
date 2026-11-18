@@ -14,16 +14,27 @@ Usage
     print(result["receipt_verified"]) # True
     print(result["steering"])         # "Reassess product suitability..."
 
-The client calls :func:`ramen_ai.verifier.verify_receipt` internally on
-every response that carries a V5 receipt and surfaces the result.
+The client calls :func:`ramen_ai.verifier.signed_verdict_problem` internally on
+every response that carries a V5 receipt and surfaces the result. The signed
+verdict, input hash, id, kid, timestamp, policy ids and anchors must all agree
+with the response, so a genuine BLOCK receipt wrapped in ``allowed: true`` never
+verifies. Pass ``require_verified_receipt=True`` to raise instead of returning
+an unverified verdict.
+
+Besides evaluation the client exposes ``client.memory`` (Enterprise Memory
+Mesh), ``client.bundles`` (global bundle catalogue) and ``client.receipts``
+(signed receipt ledger).
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from typing import Any, Literal
 
 import httpx
+
+from ._http import _invalid, error_from_response
+from .errors import ReceiptVerificationError
 
 from .governed import (
     generate_governed as _generate_governed,
@@ -35,8 +46,10 @@ from .governed_types import (
     GovernedProviderName,
     GovernedStreamEvent,
 )
-from .types import AttestationPayload
-from .verifier import verify_receipt
+from .memory_mesh import MemoryMeshApi
+from .resources import BundlesApi, ReceiptsApi
+from .types import AttestationPayload, ComplianceVerdict
+from .verifier import AUDIT_PUBLIC_KEYS, VERDICT_ALLOW, VERDICT_BLOCK, signed_verdict_problem
 
 _EVALUATE_PATH = "/api/v1/paas/evaluate"
 _DEFAULT_BASE_URL = "https://api.ramenai.dev"
@@ -55,6 +68,15 @@ class RamenClient:
         Override the API base URL (useful for staging / local testing).
     timeout:
         HTTP request timeout in seconds (default: 30).
+    require_verified_receipt:
+        Fail closed. When true, :meth:`evaluate_compliance` raises
+        :class:`ramen_ai.ReceiptVerificationError` unless the response carries a
+        receipt that verifies against its own signed verdict. Default: false.
+    public_keys:
+        Override the pinned receipt keys (for example with test vectors). The
+        production key ``ramen_pk_v1`` is used by default.
+    transport:
+        A custom ``httpx`` transport, for proxies or tests. Default: httpx's own.
     """
 
     def __init__(
@@ -63,10 +85,15 @@ class RamenClient:
         *,
         base_url: str = _DEFAULT_BASE_URL,
         timeout: float = _DEFAULT_TIMEOUT,
+        require_verified_receipt: bool = False,
+        public_keys: Mapping[str, str] | None = None,
+        transport: httpx.BaseTransport | None = None,
     ) -> None:
         if not api_key:
             raise ValueError("api_key must be a non-empty string.")
         self._api_key = api_key
+        self._require_verified_receipt = require_verified_receipt
+        self._public_keys: Mapping[str, str] = AUDIT_PUBLIC_KEYS if public_keys is None else public_keys
         self._http = httpx.Client(
             base_url=base_url,
             headers={
@@ -74,7 +101,14 @@ class RamenClient:
                 "Content-Type": "application/json",
             },
             timeout=timeout,
+            transport=transport,
         )
+        #: Enterprise Memory Mesh (``/api/v1/memory/*``).
+        self.memory = MemoryMeshApi(self._http)
+        #: Global bundle catalogue (``GET /api/v1/safety/bundles``).
+        self.bundles = BundlesApi(self._http)
+        #: Signed receipt ledger (``GET /api/v1/paas/receipts``).
+        self.receipts = ReceiptsApi(self._http)
 
     # ---------------------------------------------------------------------- #
     # Public API                                                               #
@@ -90,7 +124,7 @@ class RamenClient:
         attestation: AttestationPayload | None = None,
         provider_key: str | None = None,
         provider_name: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> ComplianceVerdict:
         """
         Evaluate *input_text* against the specified policies or bundles.
 
@@ -128,8 +162,9 @@ class RamenClient:
         ``allowed`` (bool)
             The compliance verdict from the server.
         ``receipt_verified`` (bool)
-            ``True`` only if a V5 receipt was present *and* both
-            verification steps (signature + hash binding) passed.
+            ``True`` only if a V5 receipt was present *and* its signature
+            verifies, its signed verdict equals ``allowed``, and the signed
+            input hash, id, kid, timestamp, policy ids and anchors all match.
         ``receipt_valid`` (bool | None)
             Raw result of :func:`verify_receipt`; ``None`` if no receipt
             was present.
@@ -154,8 +189,12 @@ class RamenClient:
         ------
         ValueError
             If neither *bundle_ids* nor *policy_ids* is provided.
-        httpx.HTTPStatusError
-            On 4xx / 5xx HTTP responses.
+        ramen_ai.RamenApiError
+            On 4xx / 5xx HTTP responses, or a body that is not JSON. It subclasses
+            ``httpx.HTTPStatusError``. Transport failures propagate as
+            ``httpx.TransportError``.
+        ramen_ai.ReceiptVerificationError
+            If ``require_verified_receipt`` is set and the receipt does not verify.
         """
         if not bundle_ids and not policy_ids:
             raise ValueError(
@@ -186,10 +225,15 @@ class RamenClient:
         response = self._http.post(
             _EVALUATE_PATH, json=body, headers=extra_headers if extra_headers else None
         )
-        response.raise_for_status()
-
-        envelope: dict[str, Any] = response.json()
-        data: dict[str, Any] = envelope.get("data", {})
+        if not response.is_success:
+            raise error_from_response(response, prefix="evaluate failed")
+        try:
+            envelope: Any = response.json()
+        except ValueError as error:
+            raise _invalid(response, "evaluate response was not valid JSON") from error
+        if not isinstance(envelope, dict):
+            raise _invalid(response, "evaluate response was not a JSON object")
+        data: dict[str, Any] = envelope.get("data") or {}
 
         allowed: bool = data.get("allowed", False)
         resolved_policy_ids: list[str] = data.get("policy_ids", [])
@@ -207,15 +251,20 @@ class RamenClient:
         receipt_reason: str | None = None
 
         if receipt and receipt.get("canonical_payload"):
-            receipt_valid, receipt_reason = verify_receipt(
-                receipt=receipt,
-                executed_at=executed_at,
-                policy_ids=resolved_policy_ids,
-                input_text=input_text,
-                allowed=allowed,
-                violations=total_violations,
-                statutory_anchors=statutory_anchors,
+            # The signed verdict must match the response's own ``allowed``, and
+            # the signed timestamp, policy ids and anchors must match the response.
+            receipt_reason = signed_verdict_problem(
+                receipt,
+                input_text,
+                VERDICT_ALLOW if allowed is True else VERDICT_BLOCK,
+                public_keys=self._public_keys,
+                binding={
+                    "executed_at": executed_at,
+                    "policy_ids": resolved_policy_ids,
+                    "statutory_anchors": statutory_anchors,
+                },
             )
+            receipt_valid = receipt_reason is None
 
         receipt_verified: bool = receipt_valid is True
 
@@ -236,7 +285,7 @@ class RamenClient:
 
         steering: str | None = " | ".join(steering_parts) if steering_parts else None
 
-        return {
+        verdict: ComplianceVerdict = {
             "allowed": allowed,
             "receipt_verified": receipt_verified,
             "receipt_valid": receipt_valid,
@@ -244,8 +293,14 @@ class RamenClient:
             "receipt_alert": receipt_alert,
             "steering": steering,
             "policy_ids": resolved_policy_ids,
-            "data": data,
+            "data": data,  # type: ignore[typeddict-item]
         }
+        if self._require_verified_receipt and not receipt_verified:
+            raise ReceiptVerificationError(
+                receipt_reason or receipt_alert or "No Schema V5 receipt was returned.",
+                verdict,
+            )
+        return verdict
 
     def generate_governed(
         self,

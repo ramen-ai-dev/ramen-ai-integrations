@@ -1,16 +1,32 @@
 """ramen-ai-core — Python client and Ed25519 V5 verifier for the ramen-ai cloud API."""
 
 from .client import RamenClient
+from ._version import __version__
 from .constants import (
     COMPLIANCE_PROVENANCE_INVARIANCE_BUNDLE_ID,
     CONTRACTUAL_ELIGIBILITY_INVARIANCE_BUNDLE_ID,
+    CREDIT_ADVERSE_ACTION_POLICY_ID,
     EU_AI_ACT_BASELINE_BUNDLE_ID,
     FINANCIAL_AUTHORIZATION_INVARIANCE_BUNDLE_ID,
     FINTECH_BANKING_INVARIANCE_BUNDLE_ID,
+    FORGE_DEFAULT_BASE_URL,
     INDUSTRIAL_IOT_ACTUATION_INVARIANCE_BUNDLE_ID,
+    INDUSTRIAL_IOT_ACTUATION_INVARIANCE_POLICY_IDS,
     PRODUCTION_BUNDLE_IDS,
+    ROBOTICS_PHYSICAL_SAFETY_POLICY_ID,
     SHIELD_CORE_IT_BUNDLE_ID,
+    WIRE_DUAL_CONTROL_POLICY_ID,
 )
+from .errors import RamenApiError, ReceiptVerificationError
+from .forge import (
+    CorrectionExemplar,
+    ForgeWriteError,
+    RecordCorrectionResult,
+    RemoteForgeMemoryStore,
+    build_provenance,
+)
+from .memory_mesh import MemoryMeshApi
+from .resources import BundlesApi, BundleSummary, ReceiptLedgerEntry, ReceiptLedgerPage, ReceiptsApi
 from .governed_errors import GovernanceDeniedException, GovernedGenerationException
 from .governed_types import (
     GovernedAccounting,
@@ -30,11 +46,39 @@ from .governed_types import (
     GovernedStreamEvent,
     GovernedTokenUsage,
 )
-from .types import AttestationPayload, RamenReceipt
-from .verifier import verify_receipt
+from .types import AttestationPayload, ComplianceVerdict, EvaluationResponse, RamenReceipt
+from .verifier import (
+    AUDIT_PUBLIC_KEYS,
+    SignedVerdictBinding,
+    sha256_hex,
+    signed_verdict_problem,
+    verify_allow_receipt_signature,
+    verify_receipt,
+)
 
 __all__ = [
+    "AUDIT_PUBLIC_KEYS",
     "AttestationPayload",
+    "BundleSummary",
+    "BundlesApi",
+    "ComplianceVerdict",
+    "CorrectionExemplar",
+    "CREDIT_ADVERSE_ACTION_POLICY_ID",
+    "EvaluationResponse",
+    "FORGE_DEFAULT_BASE_URL",
+    "ForgeWriteError",
+    "INDUSTRIAL_IOT_ACTUATION_INVARIANCE_POLICY_IDS",
+    "MemoryMeshApi",
+    "RamenApiError",
+    "ReceiptLedgerEntry",
+    "ReceiptLedgerPage",
+    "ReceiptVerificationError",
+    "ReceiptsApi",
+    "RecordCorrectionResult",
+    "RemoteForgeMemoryStore",
+    "ROBOTICS_PHYSICAL_SAFETY_POLICY_ID",
+    "SignedVerdictBinding",
+    "WIRE_DUAL_CONTROL_POLICY_ID",
     "COMPLIANCE_PROVENANCE_INVARIANCE_BUNDLE_ID",
     "CONTRACTUAL_ELIGIBILITY_INVARIANCE_BUNDLE_ID",
     "EU_AI_ACT_BASELINE_BUNDLE_ID",
@@ -63,6 +107,9 @@ __all__ = [
     "GovernedTokenUsage",
     "RamenClient",
     "RamenReceipt",
+    "build_provenance",
+    "sha256_hex",
+    "signed_verdict_problem",
+    "verify_allow_receipt_signature",
     "verify_receipt",
 ]
-__version__ = "0.3.3"
