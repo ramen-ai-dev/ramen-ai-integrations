@@ -45,8 +45,8 @@ Requires Python ≥ 3.10 and `pydantic-ai ≥ 0.0.14`.
     <img src="https://img.shields.io/badge/MLflow-0194E2?style=flat&logo=mlflow&logoColor=white" alt="MLflow"/>
   </a>
   &nbsp;
-  <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/ramen-data-filter">
-    <img src="https://img.shields.io/badge/ramen%20data%20filter-D97706?style=flat&logo=pandas&logoColor=white" alt="ramen data filter"/>
+  <a href="https://github.com/ramen-ai-dev/ramen-foundry/blob/master/docs/data-filtration.md">
+    <img src="https://img.shields.io/badge/ramen%20foundry%20data-D97706?style=flat&logo=pandas&logoColor=white" alt="ramen foundry data"/>
   </a>
   &nbsp;
   <a href="https://github.com/ramen-ai-dev/dsh-ramen-guard">

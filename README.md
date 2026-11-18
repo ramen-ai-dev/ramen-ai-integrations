@@ -54,8 +54,8 @@ steering instruction that is auditable, reproducible, and legally defensible.
     <img src="https://img.shields.io/badge/MLflow-0194E2?style=flat&logo=mlflow&logoColor=white" alt="MLflow"/>
   </a>
   &nbsp;
-  <a href="https://github.com/ramen-ai-dev/ramen-ai-integrations/tree/master/plugins/ramen-data-filter">
-    <img src="https://img.shields.io/badge/ramen%20data%20filter-D97706?style=flat&logo=pandas&logoColor=white" alt="ramen data filter"/>
+  <a href="https://github.com/ramen-ai-dev/ramen-foundry/blob/master/docs/data-filtration.md">
+    <img src="https://img.shields.io/badge/ramen%20foundry%20data-D97706?style=flat&logo=pandas&logoColor=white" alt="ramen foundry data"/>
   </a>
   &nbsp;
   <a href="https://github.com/ramen-ai-dev/dsh-ramen-guard">
@@ -136,7 +136,7 @@ queue, or gateway not covered by the plugins below.
 | `mcp-proxy` | MCP stdio (universal) | [Standalone repository](https://github.com/ramen-ai-dev/mcp-shield-proxy) | Universal stdio proxy intercepting `tools/call` JSON-RPC at the transport layer. Works with Claude Desktop and any stdio MCP client. |
 | `cmcp-python` | cMCP + TRACE | [`plugins/cmcp-python/`](plugins/cmcp-python/) | cMCP tool-call policy adapter, plus a TRACE Trust Record exporter that maps V5 Ed25519 receipts onto the agentrust-io EAT profile. |
 | `mlflow-python` | MLflow / Databricks | [`plugins/mlflow-python/`](plugins/mlflow-python/) | `mlflow.pyfunc.PythonModel` wrapper enforcing algorithmic governance on classical ML. Evaluates feature arrays and SHAP attributions for proxy bias pre-inference; halts serving on `[BLOCKED]`. |
-| `ramen-data-filter` | Pandas / CSV | [`plugins/ramen-data-filter/`](plugins/ramen-data-filter/) | Dual-mode row filtration for RAG ingestion and MLOps datasets. Strictly excludes blocked records or semantically imputes steering-approved columns. |
+| `ramen-foundry[data]` | Pandas / CSV | [Standalone repository](https://github.com/ramen-ai-dev/ramen-foundry/blob/master/docs/data-filtration.md) | Dual-mode row filtration for RAG ingestion and MLOps datasets. Strictly excludes blocked records or semantically imputes steering-approved columns. Install with `pip install "ramen-foundry[data]"` and import `ramen_foundry.data`; it replaces the former `ramen-data-filter` plugin. |
 | `dsh-ramen-guard` | DeepSeek Harness | [Standalone repository](https://github.com/ramen-ai-dev/dsh-ramen-guard) | Unofficial Cordis guard that, in enforcement mode, blocks policy-violating tool intent before execution and requires a locally verified Ed25519 receipt for allowed calls. |
 
 ---
@@ -201,8 +201,7 @@ Full bundle and policy reference: [https://ramenai.dev/pricing](https://ramenai.
 │   ├── pydantic-ai/         # PydanticAI args_validator middleware
 │   ├── mcp-proxy/           # Universal MCP stdio transport interceptor
 │   ├── cmcp-python/         # cMCP policy adapter + TRACE record exporter
-│   ├── mlflow-python/       # MLflow pyfunc algorithmic governance wrapper
-│   ├── ramen-data-filter/   # Pandas/CSV filtration for RAG and MLOps datasets
+│   └── mlflow-python/       # MLflow pyfunc algorithmic governance wrapper
 ├── .github/
 │   └── workflows/           # CI workflows
 └── RED_TEAM_GUIDE.md        # Zero-day evasion vectors and challenge guide
